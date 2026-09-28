@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Campo IAM · Maringá</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">IAM</div>
+  <h1>Maringá · Contrato 007/2025 · UNILIVRE</h1>
+  <button class="hbtn" onclick="openImport()">⬆ Importar</button>
+  <div class="hsep"></div>
+  <button class="hbtn" onclick="exportCSV()">⬇ CSV</button>
+  <div class="hsep"></div>
+  <button class="hbtn" onclick="toggleTheme()">◑</button>
+</header>
+
+<div class="main">
+  <!-- sidebar -->
+  <aside class="sidebar">
+    <div class="sb-scroll">
+
+      <div class="note">
+        <strong>⚠ Dados por dispositivo</strong>
+        Registros ficam no navegador local. Para compartilhar com a Prefeitura, use <em>Exportar CSV</em>.
+      </div>
+
+      <!-- search -->
+      <div class="stitle" style="margin-top:0">Buscar logradouro</div>
+      <div class="sbox">
+        <input id="sinp" class="sinput" type="text" placeholder="Rua, avenida… Maringá" autocomplete="off"
+          oninput="onSearchInput()" onkeydown="if(event.key==='Enter')doSearch()">
+        <div class="sspin" id="sspin"></div>
+        <div class="sres" id="sres"></div>
+      </div>
+
+      <!-- stats -->
+      <div class="stitle">Resumo do projeto</div>
+      <div class="stats" id="statsEl"></div>
+
+      <!-- phases -->
+      <div class="stitle">Progresso por etapa</div>
+      <div id="phaseEl"></div>
+
+      <!-- layer toggles -->
+      <div class="stitle">Meta 01 — Estabilidade de Encostas</div>
+      <div id="layersM01El"></div>
+      <div class="stitle">Meta 03 — Microdrenagem Urbana</div>
+      <div id="layersM03El"></div>
+      <div class="stitle">Base Cartográfica</div>
+      <div id="layersBaseEl"></div>
+      <div class="stitle">Registros de campo</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div id="layersCampoEl" style="flex:1"></div>
+        <button class="btn btn-p" style="padding:4px 10px;font-size:11px;margin-left:8px" onclick="openForm(null)">+ Novo</button>
+      </div>
+      <div id="recList"></div>
+    </div>
+  </aside>
+
+  <!-- map -->
+  <div class="mapwrap">
+    <div id="map"></div>
+
+    <!-- floating legend -->
+    <div class="flegend" id="flegend">
+      <div class="fleg-title">
+        Legenda
+        <button class="fleg-toggle" id="flegtoggle" onclick="toggleLegend()">▲</button>
+      </div>
+      <div id="flegbody">
+        <div class="fleg-section">Meta 01 — Estabilidade</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><rect x="1" y="1" width="12" height="12" fill="rgba(200,127,0,.15)" stroke="#C87F00" stroke-width="2" stroke-dasharray="4,2"/></svg></div>Áreas LIDER (16)</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><polygon points="7,1 13,7 7,13 1,7" fill="#DC2626" stroke="white" stroke-width="1.2"/><circle cx="7" cy="7" r="2" fill="white"/></svg></div>Prioridade Erosão (30 mapeados / 50 total)</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><circle cx="7" cy="7" r="6" fill="#1D4ED8" stroke="white" stroke-width="1.2"/><line x1="7" y1="2" x2="7" y2="12" stroke="white" stroke-width="1.2"/></svg></div>Sondagem SPT/SM (55)</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><rect x="1" y="1" width="12" height="12" rx="2" fill="#D97706" stroke="white" stroke-width="1.2"/></svg></div>Caract. Solo AI (14)</div>
+        <div class="fleg-section">Meta 03 — Microdrenagem</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><rect x="1" y="1" width="12" height="12" fill="rgba(249,115,22,.2)" stroke="#F97316" stroke-width="2" stroke-dasharray="3,2"/></svg></div>Áreas Prioritárias (37)</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><polygon points="7,1 13,7 7,13 1,7" fill="#059669" stroke="white" stroke-width="1.2"/></svg></div>Seções concluídas (86)</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><polygon points="7,1 13,7 7,13 1,7" fill="none" stroke="#9CA3AF" stroke-width="2"/></svg></div>Seções pendentes (28)</div>
+        <div class="fleg-section">Base Cartográfica</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="14"><rect x="1" y="1" width="12" height="12" fill="rgba(14,116,144,.1)" stroke="#0E7490" stroke-width="2"/></svg></div>Subbacias IAM (18)</div>
+        <div class="fleg-row"><div class="lsym"><svg width="14" height="5"><line x1="0" y1="2.5" x2="14" y2="2.5" stroke="#2563EB" stroke-width="3"/></svg></div>Hidrografia (285)</div>
+        <div class="fleg-section">Campo Geral</div>
+        <div class="fleg-row"><div class="lsym"><svg width="11" height="15"><path d="M5.5 0C2.46 0 0 2.46 0 5.5C0 9.63 5.5 15 5.5 15S11 9.63 11 5.5C11 2.46 8.54 0 5.5 0Z" fill="#1A9B6C"/></svg></div>Concluído</div>
+        <div class="fleg-row"><div class="lsym"><svg width="11" height="15"><path d="M5.5 0C2.46 0 0 2.46 0 5.5C0 9.63 5.5 15 5.5 15S11 9.63 11 5.5C11 2.46 8.54 0 5.5 0Z" fill="#C87F00"/></svg></div>Em andamento</div>
+        <div class="fleg-row"><div class="lsym"><svg width="11" height="15"><path d="M5.5 0C2.46 0 0 2.46 0 5.5C0 9.63 5.5 15 5.5 15S11 9.63 11 5.5C11 2.46 8.54 0 5.5 0Z" fill="#DC2626"/></svg></div>Problema</div>
+      </div>
+    </div>
+
+    <!-- mode bar -->
+    <div class="modebar">
+      <button class="mbtn on" id="mbview" onclick="setMode('view')">👁 Visualizar</button>
+      <button class="mbtn"    id="mbpin"  onclick="setMode('pin')">📍 Marcar ponto</button>
+    </div>
+  </div>
+</div>
+
+<!-- record modal -->
+<div class="overlay" id="formOverlay">
+  <div class="modal">
+    <div class="mhead">
+      <h2 id="formTitle">Novo registro</h2>
+      <button class="mclose" onclick="closeForm()">×</button>
+    </div>
+    <div class="mbody">
+      <input type="hidden" id="fId">
+      <div class="fg2">
+        <div class="fg"><label>Latitude</label><input id="fLat" type="number" step="any"></div>
+        <div class="fg"><label>Longitude</label><input id="fLng" type="number" step="any"></div>
+      </div>
+      <div class="fg2">
+        <div class="fg"><label>Logradouro</label><input id="fRua" placeholder="Ex.: Rua das Flores"></div>
+        <div class="fg"><label>Bairro</label><input id="fBairro" placeholder="Ex.: Zona 01"></div>
+      </div>
+      <div class="fg2">
+        <div class="fg"><label>Etapa</label>
+          <select id="fFase">
+            <option value="diagnostico">Diagnóstico</option>
+            <option value="topografia">Topografia</option>
+            <option value="hidrologico">Hidrológico</option>
+            <option value="plano">Plano de Ação</option>
+            <option value="relatorio">Relatório Final</option>
+          </select>
+        </div>
+        <div class="fg"><label>Status</label>
+          <select id="fStatus">
+            <option value="concluido">Concluído</option>
+            <option value="em_andamento">Em andamento</option>
+            <option value="nao_iniciado">Não iniciado</option>
+            <option value="problema">Problema</option>
+          </select>
+        </div>
+      </div>
+      <div class="fg"><label>Atividade</label><input id="fAtiv" placeholder="Descreva a atividade realizada"></div>
+      <div class="fg2">
+        <div class="fg"><label>Técnico</label><input id="fTec" placeholder="Nome"></div>
+        <div class="fg"><label>Data</label><input id="fData" type="date"></div>
+      </div>
+      <div class="fg"><label>Observações</label><textarea id="fObs"></textarea></div>
+      <div class="fg"><label>Fotos (máx. 5)</label>
+        <div class="pstrip" id="pstrip">
+          <div class="padd" onclick="document.getElementById('photoInp').click()">+</div>
+        </div>
+        <input type="file" id="photoInp" accept="image/*" multiple style="display:none" onchange="addPhotos(this)">
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-d" id="delBtn" onclick="deleteRec()" style="display:none;margin-right:auto">Excluir</button>
+      <button class="btn btn-o" onclick="closeForm()">Cancelar</button>
+      <button class="btn btn-p" onclick="saveRec()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- import modal -->
+<div class="overlay" id="importOverlay">
+  <div class="modal" style="max-width:440px">
+    <div class="mhead">
+      <h2>Importar dados geoespaciais</h2>
+      <button class="mclose" onclick="closeImport()">×</button>
+    </div>
+    <div class="mbody">
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:12px">
+        Arraste ou selecione um arquivo <strong>GeoJSON</strong> ou <strong>CSV</strong>
+        (colunas: <code>lat</code>, <code>lng</code>, <code>name</code>).
+      </p>
+      <div class="izone" id="izone"
+        onclick="document.getElementById('ifile').click()"
+        ondragover="event.preventDefault();this.classList.add('drag')"
+        ondragleave="this.classList.remove('drag')"
+        ondrop="handleDrop(event)">
+        <div class="big">📂</div>
+        <p>Clique ou arraste aqui</p>
+        <p style="font-size:11px;margin-top:3px">.geojson · .json · .csv</p>
+      </div>
+      <input type="file" id="ifile" accept=".geojson,.json,.csv" style="display:none" onchange="handleIFile(this)">
+      <div id="iresult" style="margin-top:12px;font-size:13px"></div>
+      <div id="ilayerrow" style="display:none;margin-top:10px">
+        <div class="fg"><label>Camada de destino</label>
+          <select id="ilayer">
+            <option value="prio_erosao">Prioridade Erosão (Meta 01)</option>
+            <option value="campo">Registro de campo</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn btn-o" onclick="closeImport()">Fechar</button>
+      <button class="btn btn-p" id="iconfirm" onclick="confirmImport()" style="display:none">Importar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
