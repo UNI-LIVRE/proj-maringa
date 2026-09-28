@@ -143,7 +143,7 @@ function initMap(){
 
   Object.keys(LDEFS).forEach(k=>{lgps[k]=L.layerGroup().addTo(map);lvis[k]=true;});
 
-  addLider(); addPrio(); addSubbacias(); addAcCriticas(); addAcPontos(); addBleGuaipo(); addHidro();
+  addLider(); addPrio(); addSubbacias(); addAreasPrio(); addAcCriticas(); addAcPontos(); addBleGuaipo(); addHidro();
   addSondSpt(); addSondAi(); addSecFeito(); addSecPend();
   records.forEach(r=>addPinMkr(r));
 
