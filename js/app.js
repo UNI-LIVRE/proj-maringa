@@ -326,7 +326,10 @@ function renderPhases(){
   document.getElementById('phaseEl').innerHTML=PHASES.map(p=>{
     const pr=records.filter(r=>r.fase===p.id),d=pr.filter(r=>r.status==='concluido').length;
     const pct=pr.length?Math.round(d/pr.length*100):0;
-    return`<div class="prow"><span class="pname">${p.name}</span><div class="pbar"><div class="pfill" style="width:${pct}%"></div></div><span class="ppct">${pct}%</span></div>`;
+    const dica=pr.length
+      ? `${p.name}: ${d} de ${pr.length} registro(s) concluído(s)`
+      : `${p.name}: nenhum registro ainda`;
+    return`<div class="prow" title="${esc(dica)}"><span class="pname">${esc(p.name)}</span><span class="ppct">${pct}%</span><div class="pbar"><div class="pfill" style="width:${pct}%"></div></div></div>`;
   }).join('');
 }
 
