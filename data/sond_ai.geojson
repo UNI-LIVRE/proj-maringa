@@ -1,0 +1,16 @@
+{"type":"FeatureCollection","name":"sond_ai","features":[
+{"type":"Feature","properties":{"name":"AI1","ponto":"P3 - Jusante do Parque Alfredo Nyffeler","ensaio":"-Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.9146734,-23.4090858]}},
+{"type":"Feature","properties":{"name":"AI2","ponto":"P4 - Av. Sofia Rasgulaeff","ensaio":"-Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.9062533,-23.3999491]}},
+{"type":"Feature","properties":{"name":"AI3","ponto":"P6 - Av. Alziro Zarur","ensaio":"-Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.9666536,-23.3987382]}},
+{"type":"Feature","properties":{"name":"AI4","ponto":"P7 - Av. Ranulfo Rodrigues da Mota","ensaio":"","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.9425626,-23.3976208]}},
+{"type":"Feature","properties":{"name":"AI5","ponto":"P8 - Ribeirão Bandeirantes do Sul","ensaio":"-Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.9831872,-23.4232926]}},
+{"type":"Feature","properties":{"name":"AI6","ponto":"P8 - Ribeirão Bandeirantes do Sul","ensaio":"-Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.9839255,-23.4225383]}},
+{"type":"Feature","properties":{"name":"AI7","ponto":"P9 - Rua Rio Tocantins","ensaio":"-Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.8981778,-23.395308]}},
+{"type":"Feature","properties":{"name":"AI8","ponto":"P10 - Rua Rio Paranapanema II","ensaio":"-Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.907079,-23.409049]}},
+{"type":"Feature","properties":{"name":"AI9","ponto":"P11","ensaio":"Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.949407,-23.411782]}},
+{"type":"Feature","properties":{"name":"AI10","ponto":"P13","ensaio":"Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.937486,-23.397191]}},
+{"type":"Feature","properties":{"name":"AI11","ponto":"P15","ensaio":"Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.899745,-23.410681]}},
+{"type":"Feature","properties":{"name":"AI12","ponto":"P21","ensaio":"Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.945833,-23.441111]}},
+{"type":"Feature","properties":{"name":"AI13","ponto":"P23","ensaio":"Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.995439,-23.412479]}},
+{"type":"Feature","properties":{"name":"AI14","ponto":"P26","ensaio":"Caract. Completa","status":"FEITO"},"geometry":{"type":"Point","coordinates":[-51.924172,-23.434904]}}
+]}
