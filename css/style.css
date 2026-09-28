@@ -112,12 +112,11 @@ header h1{font-size:14px;font-weight:600;flex:1;white-space:nowrap;overflow:hidd
 .scard .l{font-size:11px;color:var(--text-muted);margin-top:2px}
 
 /* Phase bars */
-.prow{display:flex;align-items:center;gap:8px;margin-bottom:8px}
-.pname{font-size:12px;color:var(--text-2);flex:1;min-width:0;
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pbar{flex:1.4;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
+.prow{display:grid;grid-template-columns:1fr auto;align-items:baseline;column-gap:8px;row-gap:4px;margin-bottom:10px;cursor:default}
+.pname{font-size:12px;color:var(--text-2);line-height:1.3}
+.pbar{grid-column:1 / -1;height:5px;background:var(--border);border-radius:3px;overflow:hidden}
 .pfill{height:100%;background:var(--green);border-radius:3px;transition:width .4s}
-.ppct{font-size:11px;color:var(--text-muted);width:28px;text-align:right}
+.ppct{font-size:11px;color:var(--text-muted);text-align:right}
 
 /* Layer toggles */
 .layer-row{display:flex;align-items:center;gap:8px;padding:5px 0;cursor:pointer}
