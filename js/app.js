@@ -103,10 +103,25 @@ let pendingImport=null, legendCollapsed=false;
 /* ═══════════ INIT ═══════════ */
 async function init(){
   await loadData();
-  try{const r=localStorage.getItem('iam007_v3');if(r)records=JSON.parse(r);}catch(e){}
+  try{
+    const {migrados}=await Store.init();
+    records=(await Store.listarRegistros()).map(featureToRec);
+    if(migrados)toast(`${migrados} registro(s) antigo(s) convertido(s) para o novo formato ✓`);
+  }catch(e){
+    console.error('Armazenamento local indisponível',e);
+    toast('Não foi possível abrir o armazenamento do navegador. Os registros não serão salvos.');
+  }
   initMap();renderStats();renderPhases();renderLayers();renderList();
 }
-function saveRecs(){try{localStorage.setItem('iam007_v3',JSON.stringify(records));}catch(e){}}
+
+/* Conversão entre o formato salvo (GeoJSON Feature, ver store.js)
+   e o formato "achatado" que o mapa e a lista usam internamente. */
+function featureToRec(f){
+  const p=f.properties||{},c=f.geometry&&f.geometry.coordinates;
+  return{id:f.id,lat:c?c[1]:null,lng:c?c[0]:null,rua:p.rua||'',bairro:p.bairro||'',
+    fase:p.fase||'diagnostico',status:p.status||'nao_iniciado',ativ:p.atividade||'',tec:p.tecnico||'',
+    data:p.data||'',obs:p.obs||'',fotos:p.fotos||[],criadoEm:p.criadoEm,atualizadoEm:p.atualizadoEm};
+}
 
 /* ═══════════ MAP ═══════════ */
 
@@ -375,14 +390,14 @@ function setMode(m){
 }
 
 /* ═══════════ RECORD FORM ═══════════ */
-function openForm(arg){
+async function openForm(arg){
   let rec=null;
   if(typeof arg==='string')rec=records.find(r=>r.id===arg);
   else if(arg&&arg.lat)rec=arg;
   document.getElementById('formTitle').textContent=rec&&rec.id?'Editar registro':'Novo registro';
   document.getElementById('fId').value=rec&&rec.id?rec.id:'';
-  document.getElementById('fLat').value=rec?rec.lat||'':'';
-  document.getElementById('fLng').value=rec?rec.lng||'':'';
+  document.getElementById('fLat').value=rec&&rec.lat!=null?rec.lat:'';
+  document.getElementById('fLng').value=rec&&rec.lng!=null?rec.lng:'';
   document.getElementById('fRua').value=rec?rec.rua||'':'';
   document.getElementById('fBairro').value=rec?rec.bairro||'':'';
   document.getElementById('fFase').value=rec?rec.fase||'diagnostico':'diagnostico';
@@ -391,56 +406,101 @@ function openForm(arg){
   document.getElementById('fTec').value=rec?rec.tec||'':'';
   document.getElementById('fData').value=rec?rec.data||today():today();
   document.getElementById('fObs').value=rec?rec.obs||'':'';
-  renderPStrip(rec?rec.fotos||[]:[]);
   document.getElementById('delBtn').style.display=rec&&rec.id?'block':'none';
-  document.getElementById('formOverlay').classList.add('open');
   setMode('view');
+  // fotos já salvas: carrega do armazenamento local
+  clearPhotos();
+  for(const fid of (rec&&rec.fotos)||[]){
+    try{const b=await Store.lerFoto(fid);if(b)currentPhotos.push({id:fid,blob:b,url:URL.createObjectURL(b)});}catch(e){}
+  }
+  renderPStrip();
+  document.getElementById('formOverlay').classList.add('open');
 }
-function closeForm(){document.getElementById('formOverlay').classList.remove('open');}
-function today(){return new Date().toISOString().split('T')[0];}
+function closeForm(){document.getElementById('formOverlay').classList.remove('open');clearPhotos();}
+function today(){const d=new Date();return new Date(d-d.getTimezoneOffset()*60000).toISOString().split('T')[0];}
 
-function saveRec(){
-  const id=document.getElementById('fId').value||('r'+Date.now());
-  const lat=parseFloat(document.getElementById('fLat').value);
-  const lng=parseFloat(document.getElementById('fLng').value);
-  const rec={id,lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng,
-    rua:document.getElementById('fRua').value.trim(),
-    bairro:document.getElementById('fBairro').value.trim(),
-    fase:document.getElementById('fFase').value,
-    status:document.getElementById('fStatus').value,
-    ativ:document.getElementById('fAtiv').value.trim(),
-    tec:document.getElementById('fTec').value.trim(),
-    data:document.getElementById('fData').value,
-    obs:document.getElementById('fObs').value.trim(),
-    fotos:currentPhotos};
-  const idx=records.findIndex(r=>r.id===id);
-  if(idx>=0){if(records[idx]._mkr)lgps['campo'].removeLayer(records[idx]._mkr);records[idx]=rec;}
-  else records.push(rec);
-  if(rec.lat&&rec.lng)addPinMkr(rec);
-  saveRecs();renderStats();renderPhases();renderLayers();renderList();
-  closeForm();toast('Registro salvo ✓');
+async function saveRec(){
+  const id=document.getElementById('fId').value||null;
+  const latS=document.getElementById('fLat').value.trim(),lngS=document.getElementById('fLng').value.trim();
+  const lat=parseFloat(latS),lng=parseFloat(lngS);
+  // validação das coordenadas
+  if((latS&&!lngS)||(!latS&&lngS)){toast('Preencha latitude e longitude, ou deixe as duas em branco.');return;}
+  if(latS&&(isNaN(lat)||isNaN(lng)||lat<-90||lat>90||lng<-180||lng>180)){toast('Coordenadas inválidas.');return;}
+  if(latS&&(lat<-23.7||lat>-23.1||lng<-52.3||lng>-51.6)&&!confirm('Este ponto está fora da região de Maringá. Salvar mesmo assim?'))return;
+
+  const anterior=id?records.find(r=>r.id===id):null;
+  try{
+    // grava as fotos novas e apaga as que foram removidas
+    const fotoIds=[];
+    for(const f of currentPhotos){f.id=f.id||await Store.salvarFoto(f.blob);fotoIds.push(f.id);}
+    for(const fid of (anterior&&anterior.fotos)||[]){if(!fotoIds.includes(fid))await Store.apagarFoto(fid);}
+
+    const feature=await Store.salvarRegistro({
+      id,
+      geometry:latS?{type:'Point',coordinates:[lng,lat]}:null,
+      properties:{
+        rua:document.getElementById('fRua').value.trim(),
+        bairro:document.getElementById('fBairro').value.trim(),
+        fase:document.getElementById('fFase').value,
+        status:document.getElementById('fStatus').value,
+        atividade:document.getElementById('fAtiv').value.trim(),
+        tecnico:document.getElementById('fTec').value.trim(),
+        data:document.getElementById('fData').value,
+        obs:document.getElementById('fObs').value.trim(),
+        fotos:fotoIds
+      }
+    });
+    const rec=featureToRec(feature);
+    const idx=records.findIndex(r=>r.id===rec.id);
+    if(idx>=0){if(records[idx]._mkr)lgps['campo'].removeLayer(records[idx]._mkr);records[idx]=rec;}
+    else records.push(rec);
+    if(rec.lat!=null&&rec.lng!=null)addPinMkr(rec);
+    renderStats();renderPhases();renderLayers();renderList();
+    closeForm();toast('Registro salvo ✓');
+  }catch(e){
+    console.error(e);
+    toast('Erro ao salvar: '+(e&&e.name==='QuotaExceededError'?'sem espaço no navegador.':(e.message||e)));
+  }
 }
-function deleteRec(){
+async function deleteRec(){
   const id=document.getElementById('fId').value;if(!id)return;
   if(!confirm('Excluir este registro?'))return;
+  try{await Store.excluirRegistro(id);}catch(e){console.error(e);toast('Erro ao excluir');return;}
   const idx=records.findIndex(r=>r.id===id);
   if(idx>=0){if(records[idx]._mkr)lgps['campo'].removeLayer(records[idx]._mkr);records.splice(idx,1);}
-  saveRecs();renderStats();renderPhases();renderLayers();renderList();closeForm();toast('Excluído');
+  renderStats();renderPhases();renderLayers();renderList();closeForm();toast('Excluído');
 }
 
-/* photos */
-function renderPStrip(fotos){
-  currentPhotos=[...fotos];
+/* photos — ficam no IndexedDB (ver store.js), reduzidas para no máx. 1600 px */
+function clearPhotos(){currentPhotos.forEach(f=>f.url&&URL.revokeObjectURL(f.url));currentPhotos=[];}
+function renderPStrip(){
   const el=document.getElementById('pstrip');
-  el.innerHTML=currentPhotos.map((f,i)=>`<img class="pthumb" src="${f}" title="Clique para remover" onclick="rmPhoto(${i})">`).join('')
+  el.innerHTML=currentPhotos.map((f,i)=>`<img class="pthumb" src="${f.url}" title="Clique para remover" onclick="rmPhoto(${i})">`).join('')
     +(currentPhotos.length<5?`<div class="padd" onclick="document.getElementById('photoInp').click()">+</div>`:'');
 }
-function addPhotos(inp){
-  Array.from(inp.files).slice(0,5-currentPhotos.length).forEach(f=>{
-    const rd=new FileReader();rd.onload=e=>{currentPhotos.push(e.target.result);renderPStrip(currentPhotos);};rd.readAsDataURL(f);
-  });inp.value='';
+async function addPhotos(inp){
+  const files=Array.from(inp.files).slice(0,5-currentPhotos.length);inp.value='';
+  for(const f of files){
+    const blob=await shrinkImage(f);
+    currentPhotos.push({id:null,blob,url:URL.createObjectURL(blob)});
+  }
+  renderPStrip();
 }
-function rmPhoto(i){currentPhotos.splice(i,1);renderPStrip(currentPhotos);}
+function rmPhoto(i){const f=currentPhotos.splice(i,1)[0];if(f&&f.url)URL.revokeObjectURL(f.url);renderPStrip();}
+function shrinkImage(file,max=1600,quality=0.82){
+  return new Promise(ok=>{
+    const url=URL.createObjectURL(file),img=new Image();
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      const k=Math.min(1,max/Math.max(img.width,img.height));
+      const c=document.createElement('canvas');c.width=Math.round(img.width*k);c.height=Math.round(img.height*k);
+      c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+      c.toBlob(b=>ok(b&&b.size<file.size?b:file),'image/jpeg',quality);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);ok(file);};
+    img.src=url;
+  });
+}
 
 /* ═══════════ IMPORT ═══════════ */
 function openImport(){document.getElementById('importOverlay').classList.add('open');}
@@ -466,6 +526,8 @@ function parseCSV(text){
 }
 function confirmImport(){
   if(!pendingImport)return;const tgt=document.getElementById('ilayer').value;let cnt=0;
+  // Importação para registros de campo desativada até ser refeita com validação e mesclagem por id.
+  if(tgt==='campo'){toast('Importação para registros de campo está desativada no momento.');return;}
   const rows=pendingImport.type==='csv'?pendingImport.rows:(pendingImport.gj.features||[]).map(f=>{
     if(!f.geometry||f.geometry.type!=='Point')return null;
     const[lng,lat]=f.geometry.coordinates;return{lat:lat+'',lng:lng+'',name:(f.properties?.name||f.properties?.nome||'')}; 
@@ -473,14 +535,26 @@ function confirmImport(){
   rows.forEach(row=>{
     const lat=parseFloat(row.lat||row.latitude),lng=parseFloat(row.lng||row.longitude||row.lon);if(isNaN(lat)||isNaN(lng))return;
     const name=row.name||row.nome||'Importado';
-    if(tgt==='campo'){const r={id:'i'+Date.now()+Math.random(),lat,lng,rua:name,bairro:'',fase:'diagnostico',ativ:'Importado',status:'nao_iniciado',tec:'',data:today(),obs:'',fotos:[]};records.push(r);addPinMkr(r);}
+    if(tgt==='campo'){return;}
     else{L.marker([lat,lng],{icon:mkPrioIcon()}).bindPopup(`<b>${esc(name)}</b>`).addTo(lgps[tgt]);}
     cnt++;
   });
-  saveRecs();renderStats();renderPhases();renderLayers();renderList();toast(`${cnt} item(ns) importado(s) ✓`);closeImport();
+  renderStats();renderPhases();renderLayers();renderList();toast(`${cnt} item(ns) importado(s) ✓`);closeImport();
 }
 
 /* ═══════════ EXPORT ═══════════ */
+async function exportBackup(){
+  try{
+    const bk=await Store.gerarBackup();
+    const blob=new Blob([JSON.stringify(bk,null,1)],{type:'application/json'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=`campo-iam-backup-${today()}.json`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    toast(`Backup gerado: ${bk.totalRegistros} registro(s), ${Object.keys(bk.fotos).length} foto(s) ✓`);
+  }catch(e){console.error(e);toast('Erro ao gerar o backup');}
+}
 function exportCSV(){
   const rows=[['id','lat','lng','rua','bairro','fase','status','atividade','tecnico','data','obs'],...records.map(r=>[r.id,r.lat,r.lng,r.rua,r.bairro,r.fase,r.status,r.ativ,r.tec,r.data,r.obs])];
   const csv=rows.map(r=>r.map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
