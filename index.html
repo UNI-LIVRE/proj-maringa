@@ -5,14 +5,18 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Campo IAM · Maringá</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/style.css?v=4">
 </head>
 <body>
 
 <header>
   <div class="logo">IAM</div>
   <h1>Maringá · Contrato 007/2025 · UNILIVRE</h1>
+  <!-- Importação desativada temporariamente (será refeita com validação e mesclagem por id)
   <button class="hbtn" onclick="openImport()">⬆ Importar</button>
+  <div class="hsep"></div>
+  -->
+  <button class="hbtn" onclick="exportBackup()" title="Baixa um arquivo com todos os registros de campo e fotos">⬇ Backup</button>
   <div class="hsep"></div>
   <button class="hbtn" onclick="exportCSV()">⬇ CSV</button>
   <div class="hsep"></div>
@@ -26,7 +30,7 @@
 
       <div class="note">
         <strong>⚠ Dados por dispositivo</strong>
-        Registros ficam no navegador local. Para compartilhar com a Prefeitura, use <em>Exportar CSV</em>.
+        Registros ficam salvos neste navegador. Use <em>⬇ Backup</em> com frequência para guardar uma cópia; para planilhas, use <em>⬇ CSV</em>.
       </div>
 
       <!-- search -->
@@ -199,6 +203,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="js/app.js"></script>
+<script src="js/store.js?v=4"></script>
+<script src="js/app.js?v=4"></script>
 </body>
 </html>
