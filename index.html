@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Campo IAM · Maringá</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="css/style.css?v=4">
+<link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 
@@ -19,6 +19,8 @@
   <button class="hbtn" onclick="exportBackup()" title="Baixa um arquivo com todos os registros de campo e fotos">⬇ Backup</button>
   <div class="hsep"></div>
   <button class="hbtn" onclick="exportCSV()">⬇ CSV</button>
+  <div class="hsep"></div>
+  <span id="modoEl" class="hmodo" style="font-size:11px;padding:3px 8px;border-radius:10px;white-space:nowrap;cursor:default"></span>
   <div class="hsep"></div>
   <button class="hbtn" onclick="toggleTheme()">◑</button>
 </header>
@@ -203,7 +205,8 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="js/store.js?v=4"></script>
-<script src="js/app.js?v=4"></script>
+<script src="js/config.js?v=5"></script>
+<script src="js/store.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 </body>
 </html>
