@@ -2,11 +2,15 @@
    store.js — camada de acesso aos REGISTROS DE CAMPO
    ───────────────────────────────────────────────────────────────
    Todo o app lê e grava registros de campo SOMENTE por aqui.
-   Hoje os dados ficam no navegador (IndexedDB). No futuro, basta
-   reescrever as funções deste arquivo para chamar a API (MongoDB
-   local ou na nuvem) — o restante do código não precisa mudar.
+   Existem dois "destinos", com as mesmas funções:
 
-   Formato de cada registro (igual ao que irá para o MongoDB):
+     • API     → servidor Node + MongoDB (pasta api/ do repositório)
+     • Navegador → IndexedDB, só neste navegador (usado no GitHub Pages)
+
+   Qual usar é definido em js/config.js. Se a API estiver configurada
+   mas não responder, o app avisa e usa o navegador.
+
+   Formato de cada registro (o mesmo nos dois destinos):
    {
      type: "Feature",
      id: "uuid",
@@ -18,9 +22,19 @@
        excluido: false, excluidoEm: null // exclusão é marcada, não apagada
      }
    }
-   Fotos ficam em um "store" separado: { id, blob, tipo, criadoEm }.
    ═══════════════════════════════════════════════════════════════ */
-const Store = (() => {
+
+function novoId() {
+  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
+  // alternativa para navegadores antigos
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+  });
+}
+
+/* ═══════════ DESTINO 1: NAVEGADOR (IndexedDB) ═══════════ */
+const StoreNavegador = (() => {
   const DB_NAME = 'campo-iam';
   const DB_VERSION = 1;
   const LEGACY_KEY = 'iam007_v3';           // formato antigo (localStorage)
@@ -29,14 +43,6 @@ const Store = (() => {
 
   /* ─── util ─────────────────────────────── */
   const agora = () => new Date().toISOString();
-  function novoId() {
-    if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-    // alternativa para navegadores antigos
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-      const r = Math.random() * 16 | 0;
-      return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
-    });
-  }
   function tx(stores, mode, fn) {
     return new Promise((ok, err) => {
       const t = db.transaction(stores, mode);
@@ -69,6 +75,7 @@ const Store = (() => {
     const migrados = await migrarLegado();
     return { migrados };
   }
+
 
   /* ─── migração do formato antigo ───────────
      Converte os registros salvos no localStorage (versão anterior)
@@ -180,31 +187,125 @@ const Store = (() => {
     return tx(['fotos'], 'readwrite', t => { t.objectStore('fotos').delete(id); });
   }
 
-  /* ─── backup ───────────────────────────── */
+  return { init, todos, listarRegistros, salvarRegistro, excluirRegistro, salvarFoto, lerFoto, apagarFoto };
+})();
+
+/* ═══════════ DESTINO 2: API (Node + MongoDB) ═══════════ */
+const StoreApi = (() => {
+  let base = '';
+
+  async function chamar(caminho, opcoes = {}) {
+    const r = await fetch(base + caminho, opcoes);
+    if (!r.ok) {
+      let msg = 'HTTP ' + r.status;
+      try { const j = await r.json(); if (j && j.erro) msg = j.erro; } catch (e) {}
+      const erro = new Error(msg); erro.status = r.status; throw erro;
+    }
+    return r;
+  }
+  const json = (metodo, corpo) => ({ method: metodo, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(corpo) });
+
+  async function init(url) {
+    base = String(url).replace(/\/+$/, '');
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000);
+    try { await chamar('/saude', { signal: ctrl.signal }); } finally { clearTimeout(t); }
+    return { migrados: 0 };
+  }
+
+  const todos = async () => (await chamar('/registros?incluirExcluidos=1')).json();
+  const listarRegistros = async () => (await chamar('/registros')).json();
+
+  async function salvarRegistro(dados) {
+    const id = dados.id || novoId();   // o id nasce no navegador, igual ao modo local
+    const r = await chamar('/registros/' + encodeURIComponent(id),
+      json('PUT', { geometry: dados.geometry || null, properties: dados.properties }));
+    return r.json();
+  }
+  async function excluirRegistro(id) {
+    try { await chamar('/registros/' + encodeURIComponent(id), { method: 'DELETE' }); }
+    catch (e) { if (e.status !== 404) throw e; }
+  }
+
+  async function salvarFoto(blob) {
+    const r = await chamar('/fotos', { method: 'POST', headers: { 'Content-Type': blob.type || 'image/jpeg' }, body: blob });
+    return (await r.json()).id;
+  }
+  async function lerFoto(id) {
+    try { return await (await chamar('/fotos/' + encodeURIComponent(id))).blob(); }
+    catch (e) { if (e.status === 404) return null; throw e; }
+  }
+  async function apagarFoto(id) {
+    try { await chamar('/fotos/' + encodeURIComponent(id), { method: 'DELETE' }); }
+    catch (e) { if (e.status !== 404) throw e; }
+  }
+
+  return { init, todos, listarRegistros, salvarRegistro, excluirRegistro, salvarFoto, lerFoto, apagarFoto };
+})();
+
+/* ═══════════ STORE: o que o app usa ═══════════ */
+const Store = (() => {
+  let destino = null;
+  let modo = null;       // 'api' | 'navegador'
+  let apiUrl = '';
+
+  /** Escolhe o destino. Devolve { modo, apiUrl, migrados, falhaApi }. */
+  async function init() {
+    const cfg = window.CAMPO_CONFIG || {};
+    apiUrl = cfg.apiUrl || '';
+    let falhaApi = null;
+    if (apiUrl) {
+      try {
+        const r = await StoreApi.init(apiUrl);
+        destino = StoreApi; modo = 'api';
+        return { modo, apiUrl, migrados: r.migrados, falhaApi };
+      } catch (e) {
+        falhaApi = e.name === 'AbortError' ? 'a API não respondeu' : (e.message || String(e));
+        console.warn('API indisponível em', apiUrl, '→ usando o navegador.', e);
+      }
+    }
+    const r = await StoreNavegador.init();
+    destino = StoreNavegador; modo = 'navegador';
+    return { modo, apiUrl, migrados: r.migrados, falhaApi };
+  }
+
   const blobParaDataUrl = b => new Promise((ok, err) => {
     const rd = new FileReader(); rd.onload = () => ok(rd.result); rd.onerror = () => err(rd.error); rd.readAsDataURL(b);
   });
 
-  /** Monta o arquivo de backup: todos os registros (inclusive excluídos) + fotos. */
+  /** Arquivo de backup: todos os registros (inclusive excluídos) + fotos. */
   async function gerarBackup() {
-    const registros = await todos();
+    const registros = await destino.todos();
     const fotos = {};
     for (const f of registros) {
       for (const fid of (f.properties.fotos || [])) {
         if (fotos[fid]) continue;
-        const b = await lerFoto(fid);
+        const b = await destino.lerFoto(fid);
         if (b) fotos[fid] = await blobParaDataUrl(b);
       }
     }
     return {
       tipo: 'campo-iam-registros',
       versao: 1,
-      exportadoEm: agora(),
+      exportadoEm: new Date().toISOString(),
+      origem: modo,
       totalRegistros: registros.length,
       registros,
       fotos
     };
   }
 
-  return { init, novoId, listarRegistros, salvarRegistro, excluirRegistro, salvarFoto, lerFoto, apagarFoto, gerarBackup };
+  return {
+    init,
+    get modo() { return modo; },
+    get apiUrl() { return apiUrl; },
+    novoId,
+    listarRegistros: () => destino.listarRegistros(),
+    salvarRegistro: d => destino.salvarRegistro(d),
+    excluirRegistro: id => destino.excluirRegistro(id),
+    salvarFoto: b => destino.salvarFoto(b),
+    lerFoto: id => destino.lerFoto(id),
+    apagarFoto: id => destino.apagarFoto(id),
+    gerarBackup
+  };
 })();

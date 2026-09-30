@@ -104,14 +104,29 @@ let pendingImport=null, legendCollapsed=false;
 async function init(){
   await loadData();
   try{
-    const {migrados}=await Store.init();
+    const info=await Store.init();
     records=(await Store.listarRegistros()).map(featureToRec);
-    if(migrados)toast(`${migrados} registro(s) antigo(s) convertido(s) para o novo formato ✓`);
+    renderModo(info);
+    if(info.falhaApi)toast('API local não respondeu — salvando só neste navegador. Veja se o "npm run dev" está rodando.');
+    else if(info.migrados)toast(`${info.migrados} registro(s) antigo(s) convertido(s) para o novo formato ✓`);
   }catch(e){
-    console.error('Armazenamento local indisponível',e);
-    toast('Não foi possível abrir o armazenamento do navegador. Os registros não serão salvos.');
+    console.error('Armazenamento indisponível',e);
+    renderModo(null);
+    toast('Não foi possível carregar os registros de campo: '+(e.message||e));
   }
   initMap();renderStats();renderPhases();renderLayers();renderList();
+}
+
+/* Indicador no cabeçalho: onde os registros estão sendo salvos */
+function renderModo(info){
+  const el=document.getElementById('modoEl');if(!el)return;
+  let txt,cor,dica;
+  if(info&&info.modo==='api'){txt='● Banco de dados';cor='#1A9B6C';dica='Registros salvos no MongoDB pela API ('+info.apiUrl+')';}
+  else if(info&&info.modo==='navegador'){
+    txt=info.falhaApi?'● Navegador (API offline)':'● Navegador';cor=info.falhaApi?'#C87F00':'#6B7280';
+    dica='Registros salvos só neste navegador'+(info.falhaApi?' — a API em '+info.apiUrl+' não respondeu':'');
+  }else{txt='● Sem armazenamento';cor='#DC2626';dica='Os registros não estão sendo salvos';}
+  el.textContent=txt;el.title=dica;el.style.color=cor;el.style.border='1px solid '+cor;
 }
 
 /* Conversão entre o formato salvo (GeoJSON Feature, ver store.js)
@@ -430,10 +445,9 @@ async function saveRec(){
 
   const anterior=id?records.find(r=>r.id===id):null;
   try{
-    // grava as fotos novas e apaga as que foram removidas
+    // grava as fotos novas (as removidas só são apagadas depois que o registro for salvo)
     const fotoIds=[];
     for(const f of currentPhotos){f.id=f.id||await Store.salvarFoto(f.blob);fotoIds.push(f.id);}
-    for(const fid of (anterior&&anterior.fotos)||[]){if(!fotoIds.includes(fid))await Store.apagarFoto(fid);}
 
     const feature=await Store.salvarRegistro({
       id,
@@ -450,6 +464,9 @@ async function saveRec(){
         fotos:fotoIds
       }
     });
+    for(const fid of (anterior&&anterior.fotos)||[]){
+      if(!fotoIds.includes(fid))Store.apagarFoto(fid).catch(e=>console.warn('Foto não apagada',fid,e));
+    }
     const rec=featureToRec(feature);
     const idx=records.findIndex(r=>r.id===rec.id);
     if(idx>=0){if(records[idx]._mkr)lgps['campo'].removeLayer(records[idx]._mkr);records[idx]=rec;}
