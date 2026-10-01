@@ -230,6 +230,14 @@ const StoreApi = (() => {
     return (await (await chamar('/auth/senha', json('POST', { senhaAtual, novaSenha }))).json()).usuario;
   }
 
+  /* ─── administração de usuários (só admin) ─── */
+  const admin = {
+    listar: async () => (await chamar('/admin/usuarios')).json(),
+    criar: async dados => (await chamar('/admin/usuarios', json('POST', dados))).json(),
+    redefinir: async id => (await chamar('/admin/usuarios/' + encodeURIComponent(id) + '/redefinir', { method: 'POST' })).json(),
+    atualizar: async (id, mudancas) => (await (await chamar('/admin/usuarios/' + encodeURIComponent(id), json('PATCH', mudancas))).json()).usuario,
+  };
+
   const todos = async () => (await chamar('/registros?incluirExcluidos=1')).json();
   const listarRegistros = async () => (await chamar('/registros')).json();
 
@@ -257,7 +265,7 @@ const StoreApi = (() => {
     catch (e) { if (e.status !== 404) throw e; }
   }
 
-  return { init, todos, listarRegistros, salvarRegistro, excluirRegistro, salvarFoto, lerFoto, apagarFoto, eu, login, logout, trocarSenha };
+  return { init, todos, listarRegistros, salvarRegistro, excluirRegistro, salvarFoto, lerFoto, apagarFoto, eu, login, logout, trocarSenha, admin };
 })();
 
 /* ═══════════ STORE: o que o app usa ═══════════ */
@@ -328,6 +336,7 @@ const Store = (() => {
     get temLogin() { return modo === 'api'; },
     login: (email, senha) => StoreApi.login(email, senha),
     logout: () => StoreApi.logout(),
-    trocarSenha: (atual, nova) => StoreApi.trocarSenha(atual, nova)
+    trocarSenha: (atual, nova) => StoreApi.trocarSenha(atual, nova),
+    admin: StoreApi.admin
   };
 })();

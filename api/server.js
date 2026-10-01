@@ -11,6 +11,7 @@
      GET    /api/auth/eu              → quem está logado
    Rotas que exigem login:
      POST   /api/auth/senha           { senhaAtual, novaSenha }
+     /api/admin/usuarios…             → tela de usuários (só administradores, ver admin.js)
      GET    /api/registros            (?incluirExcluidos=1)
      GET    /api/registros/:id
      PUT    /api/registros/:id        → cria ou atualiza
@@ -27,6 +28,7 @@ const express = require('express');
 const { conectar, paraFeature } = require('./db');
 const { validarId, validarRegistro } = require('./registro');
 const { criarAuth } = require('./auth');
+const { criarRotasAdmin } = require('./admin');
 
 const PRODUCAO = process.env.NODE_ENV === 'production';
 const CONFIG = {
@@ -38,7 +40,13 @@ const CONFIG = {
   cookieSeguro: process.env.COOKIE_SEGURO ? process.env.COOKIE_SEGURO === '1' : PRODUCAO,
   // atrás de um balanceador/proxy (nuvem), para saber o IP real de quem acessa
   trustProxy: process.env.TRUST_PROXY || (PRODUCAO ? 1 : false),
+  // como o acesso de um usuário novo é entregue: 'senha' (provisória, na tela) ou 'email' (futuro)
+  conviteModo: (process.env.CONVITE_MODO || 'senha').trim().toLowerCase(),
 };
+if (!['senha', 'email'].includes(CONFIG.conviteModo)) {
+  console.warn(`⚠ CONVITE_MODO="${CONFIG.conviteModo}" não reconhecido; usando "senha".`);
+  CONFIG.conviteModo = 'senha';
+}
 const RAIZ_SITE = path.join(__dirname, '..');   // pasta com index.html, css/, js/, data/
 const TIPOS_FOTO = /^image\/(jpeg|png|webp|gif|heic|heif)$/;
 const MAX_FOTO = 15 * 1024 * 1024; // 15 MB
@@ -91,6 +99,9 @@ function criarApp(conexao) {
 
   /* daqui para baixo, tudo exige login */
   api.use(auth.exigirLogin);
+
+  /* tela "Usuários" — só administradores */
+  api.use('/admin', criarRotasAdmin(conexao, CONFIG));
 
   /* ─── registros ─────────────────────────── */
   api.get('/registros', async (req, res) => {
