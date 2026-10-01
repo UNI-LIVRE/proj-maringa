@@ -9,6 +9,8 @@ async function conectar(uri, nomeBanco) {
   const db = client.db(nomeBanco);
   const registros = db.collection('registros');
   const fotos = new GridFSBucket(db, { bucketName: 'fotos' });
+  const usuarios = db.collection('usuarios');
+  const sessoes = db.collection('sessoes');
 
   // índices (criá-los de novo não faz nada se já existirem)
   await registros.createIndexes([
@@ -16,8 +18,14 @@ async function conectar(uri, nomeBanco) {
     { key: { geometry: '2dsphere' }, name: 'geometry_2dsphere' },
     { key: { 'properties.excluido': 1, 'properties.atualizadoEm': -1 }, name: 'ativos_recentes' },
   ]);
+  await usuarios.createIndexes([{ key: { email: 1 }, name: 'email_unico', unique: true }]);
+  await sessoes.createIndexes([
+    // o próprio MongoDB apaga as sessões vencidas
+    { key: { expiraEm: 1 }, name: 'expira_ttl', expireAfterSeconds: 0 },
+    { key: { usuarioId: 1 }, name: 'por_usuario' },
+  ]);
 
-  return { client, db, registros, fotos };
+  return { client, db, registros, fotos, usuarios, sessoes };
 }
 
 /** Documento do Mongo → formato usado pelo navegador (troca _id por id). */

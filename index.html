@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Campo IAM · Maringá</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="css/style.css?v=5">
+<link rel="stylesheet" href="css/style.css?v=6">
 </head>
 <body>
 
@@ -21,6 +21,11 @@
   <button class="hbtn" onclick="exportCSV()">⬇ CSV</button>
   <div class="hsep"></div>
   <span id="modoEl" class="hmodo" style="font-size:11px;padding:3px 8px;border-radius:10px;white-space:nowrap;cursor:default"></span>
+  <span id="userEl" style="display:none;align-items:center;gap:4px">
+    <div class="hsep"></div>
+    <button class="hbtn" id="userBtn" onclick="openSenha(false)" title="Trocar senha"></button>
+    <button class="hbtn" onclick="doLogout()">Sair</button>
+  </span>
   <div class="hsep"></div>
   <button class="hbtn" onclick="toggleTheme()">◑</button>
 </header>
@@ -30,7 +35,7 @@
   <aside class="sidebar">
     <div class="sb-scroll">
 
-      <div class="note">
+      <div class="note" id="noteEl">
         <strong>⚠ Dados por dispositivo</strong>
         Registros ficam salvos neste navegador. Use <em>⬇ Backup</em> com frequência para guardar uma cópia; para planilhas, use <em>⬇ CSV</em>.
       </div>
@@ -202,11 +207,46 @@
   </div>
 </div>
 
+<!-- login (só quando a página é aberta pela API) -->
+<div class="overlay" id="loginOverlay">
+  <div class="modal" style="max-width:380px">
+    <div class="mhead"><h2>Entrar · Campo IAM</h2></div>
+    <form class="mbody" id="loginForm" onsubmit="event.preventDefault();doLogin()">
+      <div class="fg"><label for="lEmail">E-mail</label><input id="lEmail" type="email" autocomplete="username" required></div>
+      <div class="fg"><label for="lSenha">Senha</label><input id="lSenha" type="password" autocomplete="current-password" required></div>
+      <div id="lErro" role="alert" style="color:var(--red);font-size:13px;min-height:18px;margin-bottom:8px"></div>
+      <button class="btn btn-p" type="submit" id="lBtn" style="width:100%;justify-content:center">Entrar</button>
+      <p style="font-size:12px;color:var(--text-muted);margin-top:12px">Esqueceu a senha? Peça ao administrador para redefini-la.</p>
+    </form>
+  </div>
+</div>
+
+<!-- troca de senha -->
+<div class="overlay" id="senhaOverlay">
+  <div class="modal" style="max-width:400px">
+    <div class="mhead">
+      <h2 id="sTitulo">Trocar senha</h2>
+      <button class="mclose" id="sFechar" onclick="closeSenha()">×</button>
+    </div>
+    <form class="mbody" onsubmit="event.preventDefault();doTrocarSenha()">
+      <p id="sAviso" style="font-size:13px;color:var(--text-2);margin-bottom:12px;display:none">
+        Você entrou com uma senha provisória. Crie uma senha sua para continuar.
+      </p>
+      <input type="text" autocomplete="username" id="sUser" style="display:none" aria-hidden="true">
+      <div class="fg"><label for="sAtual">Senha atual</label><input id="sAtual" type="password" autocomplete="current-password" required></div>
+      <div class="fg"><label for="sNova">Nova senha (mín. 10 caracteres)</label><input id="sNova" type="password" autocomplete="new-password" minlength="10" required></div>
+      <div class="fg"><label for="sConf">Repita a nova senha</label><input id="sConf" type="password" autocomplete="new-password" minlength="10" required></div>
+      <div id="sErro" role="alert" style="color:var(--red);font-size:13px;min-height:18px;margin-bottom:8px"></div>
+      <button class="btn btn-p" type="submit" id="sBtn" style="width:100%;justify-content:center">Salvar nova senha</button>
+    </form>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="js/config.js?v=5"></script>
-<script src="js/store.js?v=5"></script>
-<script src="js/app.js?v=5"></script>
+<script src="js/config.js?v=6"></script>
+<script src="js/store.js?v=6"></script>
+<script src="js/app.js?v=6"></script>
 </body>
 </html>

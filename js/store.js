@@ -195,11 +195,15 @@ const StoreApi = (() => {
   let base = '';
 
   async function chamar(caminho, opcoes = {}) {
-    const r = await fetch(base + caminho, opcoes);
+    const r = await fetch(base + caminho, { credentials: 'same-origin', ...opcoes });
     if (!r.ok) {
-      let msg = 'HTTP ' + r.status;
-      try { const j = await r.json(); if (j && j.erro) msg = j.erro; } catch (e) {}
-      const erro = new Error(msg); erro.status = r.status; throw erro;
+      let msg = 'HTTP ' + r.status, corpo = null;
+      try { corpo = await r.json(); if (corpo && corpo.erro) msg = corpo.erro; } catch (e) {}
+      const erro = new Error(msg); erro.status = r.status;
+      // sessão vencida ou senha provisória pendente: o app mostra a tela certa
+      if (r.status === 401 && !caminho.startsWith('/auth/')) window.dispatchEvent(new CustomEvent('campo:precisa-login'));
+      if (r.status === 403 && corpo && corpo.trocarSenha) window.dispatchEvent(new CustomEvent('campo:precisa-trocar-senha'));
+      throw erro;
     }
     return r;
   }
@@ -210,7 +214,20 @@ const StoreApi = (() => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), 4000);
     try { await chamar('/saude', { signal: ctrl.signal }); } finally { clearTimeout(t); }
-    return { migrados: 0 };
+    return { migrados: 0, usuario: await eu() };
+  }
+
+  /* ─── login ─────────────────────────────── */
+  async function eu() {
+    try { return (await (await chamar('/auth/eu')).json()).usuario; }
+    catch (e) { if (e.status === 401) return null; throw e; }
+  }
+  async function login(email, senha) {
+    return (await (await chamar('/auth/login', json('POST', { email, senha }))).json()).usuario;
+  }
+  async function logout() { await chamar('/auth/logout', { method: 'POST' }); }
+  async function trocarSenha(senhaAtual, novaSenha) {
+    return (await (await chamar('/auth/senha', json('POST', { senhaAtual, novaSenha }))).json()).usuario;
   }
 
   const todos = async () => (await chamar('/registros?incluirExcluidos=1')).json();
@@ -240,7 +257,7 @@ const StoreApi = (() => {
     catch (e) { if (e.status !== 404) throw e; }
   }
 
-  return { init, todos, listarRegistros, salvarRegistro, excluirRegistro, salvarFoto, lerFoto, apagarFoto };
+  return { init, todos, listarRegistros, salvarRegistro, excluirRegistro, salvarFoto, lerFoto, apagarFoto, eu, login, logout, trocarSenha };
 })();
 
 /* ═══════════ STORE: o que o app usa ═══════════ */
@@ -258,7 +275,7 @@ const Store = (() => {
       try {
         const r = await StoreApi.init(apiUrl);
         destino = StoreApi; modo = 'api';
-        return { modo, apiUrl, migrados: r.migrados, falhaApi };
+        return { modo, apiUrl, migrados: r.migrados, falhaApi, usuario: r.usuario };
       } catch (e) {
         falhaApi = e.name === 'AbortError' ? 'a API não respondeu' : (e.message || String(e));
         console.warn('API indisponível em', apiUrl, '→ usando o navegador.', e);
@@ -306,6 +323,11 @@ const Store = (() => {
     salvarFoto: b => destino.salvarFoto(b),
     lerFoto: id => destino.lerFoto(id),
     apagarFoto: id => destino.apagarFoto(id),
-    gerarBackup
+    gerarBackup,
+    // login: só existe no modo API (no navegador não há login)
+    get temLogin() { return modo === 'api'; },
+    login: (email, senha) => StoreApi.login(email, senha),
+    logout: () => StoreApi.logout(),
+    trocarSenha: (atual, nova) => StoreApi.trocarSenha(atual, nova)
   };
 })();
