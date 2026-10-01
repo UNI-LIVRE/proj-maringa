@@ -51,7 +51,8 @@ hashSenha(crypto.randomBytes(12).toString('hex')).then(h => { HASH_FALSO = h; })
 function validarNovaSenha(senha, { email, atual } = {}) {
   if (typeof senha !== 'string' || senha.length < SENHA_MIN) return `a senha precisa ter pelo menos ${SENHA_MIN} caracteres`;
   if (senha.length > 200) return 'senha longa demais';
-  if (email && senha.toLowerCase().includes(String(email).split('@')[0].toLowerCase())) return 'a senha não pode conter o e-mail';
+  const inicioEmail = String(email || '').split('@')[0].toLowerCase();
+  if (inicioEmail.length >= 4 && senha.toLowerCase().includes(inicioEmail)) return 'a senha não pode conter o e-mail';
   if (atual && senha === atual) return 'a nova senha precisa ser diferente da atual';
   if (/^(.)\1+$/.test(senha)) return 'senha fraca demais';
   return null;

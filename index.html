@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Campo IAM · Maringá</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="css/style.css?v=6">
+<link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
 
@@ -23,6 +23,7 @@
   <span id="modoEl" class="hmodo" style="font-size:11px;padding:3px 8px;border-radius:10px;white-space:nowrap;cursor:default"></span>
   <span id="userEl" style="display:none;align-items:center;gap:4px">
     <div class="hsep"></div>
+    <button class="hbtn" id="adminBtn" onclick="openUsuarios()" style="display:none" title="Cadastrar e gerenciar usuários">👥 Usuários</button>
     <button class="hbtn" id="userBtn" onclick="openSenha(false)" title="Trocar senha"></button>
     <button class="hbtn" onclick="doLogout()">Sair</button>
   </span>
@@ -221,6 +222,46 @@
   </div>
 </div>
 
+<!-- usuários (só administradores) -->
+<div class="overlay" id="usuariosOverlay">
+  <div class="modal" style="max-width:760px;width:calc(100% - 32px)">
+    <div class="mhead">
+      <h2>Usuários</h2>
+      <button class="mclose" onclick="closeUsuarios()">×</button>
+    </div>
+    <div class="mbody">
+      <div id="uSenhaBox" role="status" style="display:none;border:1px solid var(--green);border-radius:8px;padding:12px;margin-bottom:14px;font-size:13px">
+        <div id="uSenhaTxt" style="margin-bottom:6px"></div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <code id="uSenha" style="font-size:16px;font-weight:600;letter-spacing:.5px;padding:4px 8px;border-radius:6px;background:var(--border)"></code>
+          <button class="btn btn-o" type="button" onclick="copiarSenhaProv()" style="padding:4px 10px;font-size:12px">Copiar</button>
+        </div>
+        <div style="color:var(--text-muted);margin-top:6px;font-size:12px">Esta senha não será mostrada de novo. Envie para a pessoa por um canal seguro; ela vai criar a própria senha no primeiro acesso.</div>
+      </div>
+
+      <form id="uForm" onsubmit="event.preventDefault();criarUsuario()" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;margin-bottom:6px">
+        <div class="fg" style="margin:0;flex:1 1 170px"><label for="uNome">Nome</label><input id="uNome" required maxlength="120" placeholder="Nome completo"></div>
+        <div class="fg" style="margin:0;flex:1 1 200px"><label for="uEmail">E-mail</label><input id="uEmail" type="email" required maxlength="200" placeholder="nome@exemplo.com"></div>
+        <div class="fg" style="margin:0;flex:0 1 150px"><label for="uPapel">Papel</label>
+          <select id="uPapel"><option value="usuario">Usuário</option><option value="admin">Administrador</option></select>
+        </div>
+        <button class="btn btn-p" type="submit" id="uCriarBtn">Cadastrar</button>
+      </form>
+      <div id="uErro" role="alert" style="color:var(--red);font-size:13px;min-height:18px;margin-bottom:6px"></div>
+
+      <div style="overflow-x:auto">
+        <table id="uTabela" style="width:100%;border-collapse:collapse;font-size:13px">
+          <thead><tr style="text-align:left;color:var(--text-muted);font-size:11px">
+            <th style="padding:6px 4px">Nome / e-mail</th><th style="padding:6px 4px">Papel</th>
+            <th style="padding:6px 4px">Situação</th><th style="padding:6px 4px">Último acesso</th><th style="padding:6px 4px"></th>
+          </tr></thead>
+          <tbody id="uLista"><tr><td colspan="5" style="padding:10px 4px;color:var(--text-muted)">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- troca de senha -->
 <div class="overlay" id="senhaOverlay">
   <div class="modal" style="max-width:400px">
@@ -245,8 +286,8 @@
 <div class="toast" id="toast"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
-<script src="js/config.js?v=6"></script>
-<script src="js/store.js?v=6"></script>
-<script src="js/app.js?v=6"></script>
+<script src="js/config.js?v=7"></script>
+<script src="js/store.js?v=7"></script>
+<script src="js/app.js?v=7"></script>
 </body>
 </html>

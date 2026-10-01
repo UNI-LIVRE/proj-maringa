@@ -191,10 +191,107 @@ async function doTrocarSenha(){
 function renderUsuario(){
   const el=document.getElementById('userEl');if(!el)return;
   if(!usuario){el.style.display='none';return;}
+  document.getElementById('adminBtn').style.display=usuario.papel==='admin'?'':'none';
   document.getElementById('userBtn').textContent='👤 '+usuario.nome.split(' ')[0];
   document.getElementById('userBtn').title=usuario.nome+' ('+usuario.email+') — clique para trocar a senha';
   el.style.display='inline-flex';
 }
+/* ═══════════ USUÁRIOS (só administradores) ═══════════ */
+let listaUsuarios=[];
+function openUsuarios(){
+  esconderSenhaProv();
+  document.getElementById('uErro').textContent='';
+  document.getElementById('usuariosOverlay').classList.add('open');
+  carregarUsuarios();
+}
+function closeUsuarios(){
+  esconderSenhaProv();   // a senha provisória não fica na tela depois de fechar
+  document.getElementById('usuariosOverlay').classList.remove('open');
+}
+async function carregarUsuarios(){
+  try{listaUsuarios=(await Store.admin.listar()).usuarios;renderUsuarios();}
+  catch(e){erroUsuarios(e);}
+}
+function erroUsuarios(e){
+  if(e&&(e.status===401))return; // a tela de login já aparece
+  const msg=e&&e.message?e.message:'falha na operação';
+  document.getElementById('uErro').textContent=msg.charAt(0).toUpperCase()+msg.slice(1)+'.';
+}
+function fmtData(iso){return iso?new Date(iso).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):'—';}
+function renderUsuarios(){
+  const corpo=document.getElementById('uLista');
+  if(!listaUsuarios.length){corpo.innerHTML='<tr><td colspan="5" style="padding:10px 4px;color:var(--text-muted)">Nenhum usuário.</td></tr>';return;}
+  const bt='class="btn btn-o" type="button" style="padding:3px 8px;font-size:11px;margin:2px"';
+  corpo.innerHTML=listaUsuarios.map(u=>{
+    const eu=usuario&&u.id===usuario.id;
+    const sit=!u.ativo?['Desativado','var(--red)']:(u.trocarSenha?['Aguardando 1º acesso','var(--amber)']:['Ativo','var(--green)']);
+    const acoes=eu?'<span style="font-size:11px;color:var(--text-muted)">(você)</span>':[
+      `<button ${bt} onclick="redefinirUsuario('${u.id}')">Redefinir senha</button>`,
+      `<button ${bt} onclick="alternarPapel('${u.id}')">${u.papel==='admin'?'Tornar usuário':'Tornar admin'}</button>`,
+      `<button class="btn btn-o" type="button" style="padding:3px 8px;font-size:11px;margin:2px${u.ativo?';color:var(--red)':''}" onclick="alternarAtivo('${u.id}')">${u.ativo?'Desativar':'Reativar'}</button>`
+    ].join('');
+    return `<tr style="border-top:1px solid var(--border)${u.ativo?'':';opacity:.6'}">
+      <td style="padding:8px 4px"><b>${esc(u.nome)}</b><br><span style="font-size:11px;color:var(--text-muted)">${esc(u.email)}</span></td>
+      <td style="padding:8px 4px">${u.papel==='admin'?'Administrador':'Usuário'}</td>
+      <td style="padding:8px 4px;color:${sit[1]};white-space:nowrap">${sit[0]}</td>
+      <td style="padding:8px 4px;white-space:nowrap">${fmtData(u.ultimoAcesso)}</td>
+      <td style="padding:6px 4px;text-align:right">${acoes}</td></tr>`;
+  }).join('');
+}
+async function criarUsuario(){
+  const nome=document.getElementById('uNome').value.trim(),email=document.getElementById('uEmail').value.trim(),papel=document.getElementById('uPapel').value;
+  const btn=document.getElementById('uCriarBtn');
+  document.getElementById('uErro').textContent='';esconderSenhaProv();
+  if(papel==='admin'&&!confirm(`${nome} terá acesso total, inclusive a esta tela de usuários. Confirmar como administrador?`))return;
+  btn.disabled=true;
+  try{
+    const r=await Store.admin.criar({nome,email,papel});
+    document.getElementById('uForm').reset();
+    mostrarSenhaProv(`Usuário <b>${esc(r.usuario.nome)}</b> cadastrado. Senha provisória para <b>${esc(r.usuario.email)}</b>:`,r.senhaProvisoria);
+    await carregarUsuarios();
+  }catch(e){erroUsuarios(e);}
+  finally{btn.disabled=false;}
+}
+async function redefinirUsuario(id){
+  const u=listaUsuarios.find(x=>x.id===id);if(!u)return;
+  if(!confirm(`Gerar uma nova senha provisória para ${u.nome}?\n\nA senha atual deixa de funcionar e a pessoa é desconectada.`))return;
+  document.getElementById('uErro').textContent='';esconderSenhaProv();
+  try{
+    const r=await Store.admin.redefinir(id);
+    mostrarSenhaProv(`Nova senha provisória de <b>${esc(r.usuario.nome)}</b> (${esc(r.usuario.email)}):`,r.senhaProvisoria);
+    await carregarUsuarios();
+  }catch(e){erroUsuarios(e);}
+}
+async function alternarAtivo(id){
+  const u=listaUsuarios.find(x=>x.id===id);if(!u)return;
+  if(u.ativo&&!confirm(`Desativar ${u.nome}?\n\nA pessoa é desconectada e não consegue mais entrar. Os registros dela continuam no sistema.`))return;
+  document.getElementById('uErro').textContent='';
+  try{await Store.admin.atualizar(id,{ativo:!u.ativo});await carregarUsuarios();toast(u.ativo?`${u.nome} desativado`:`${u.nome} reativado ✓`);}
+  catch(e){erroUsuarios(e);}
+}
+async function alternarPapel(id){
+  const u=listaUsuarios.find(x=>x.id===id);if(!u)return;
+  const novo=u.papel==='admin'?'usuario':'admin';
+  if(!confirm(novo==='admin'?`Tornar ${u.nome} administrador?\n\nTerá acesso a esta tela e poderá gerenciar todos os usuários.`:`Retirar o acesso de administrador de ${u.nome}?`))return;
+  document.getElementById('uErro').textContent='';
+  try{await Store.admin.atualizar(id,{papel:novo});await carregarUsuarios();}
+  catch(e){erroUsuarios(e);}
+}
+function mostrarSenhaProv(textoHtml,senha){
+  document.getElementById('uSenhaTxt').innerHTML=textoHtml;
+  document.getElementById('uSenha').textContent=senha;
+  document.getElementById('uSenhaBox').style.display='block';
+}
+function esconderSenhaProv(){
+  document.getElementById('uSenha').textContent='';
+  document.getElementById('uSenhaBox').style.display='none';
+}
+async function copiarSenhaProv(){
+  const s=document.getElementById('uSenha').textContent;
+  try{await navigator.clipboard.writeText(s);toast('Senha copiada ✓');}
+  catch(e){toast('Não foi possível copiar; selecione e copie manualmente.');}
+}
+
 // a sessão venceu no meio do uso → volta ao login sem perder o que está na tela
 window.addEventListener('campo:precisa-login',()=>{
   if(loginResolver)return;

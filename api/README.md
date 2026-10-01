@@ -39,6 +39,12 @@ e crie a sua senha. Deixe o terminal aberto enquanto usa.
 
 ## Usuários (administrador)
 
+**Pela página:** quem é administrador vê o botão **👥 Usuários** no topo. Ali dá para
+cadastrar, redefinir senha, tornar administrador, desativar e reativar. Ao cadastrar
+ou redefinir, a senha provisória aparece **uma única vez** na tela, com botão "Copiar".
+
+**Pelo terminal** (primeiro administrador ou emergências):
+
 | Comando | O que faz |
 |---|---|
 | `npm run usuarios -- criar email "Nome"` | cria usuário e mostra a senha provisória |
@@ -48,8 +54,14 @@ e crie a sua senha. Deixe o terminal aberto enquanto usa.
 | `npm run usuarios -- desativar email` | bloqueia o acesso e encerra as sessões abertas |
 | `npm run usuarios -- ativar email` | libera de novo |
 
-Passe a senha provisória por um canal seguro (pessoalmente, mensagem
-direta). A pessoa é obrigada a trocá-la no primeiro acesso.
+Travas (valem na tela e no terminal): ninguém desativa a própria conta nem retira o
+próprio acesso de administrador, e sempre sobra pelo menos um administrador ativo.
+
+Passe a senha provisória por um canal seguro (pessoalmente, mensagem direta).
+A pessoa é obrigada a trocá-la no primeiro acesso.
+
+`CONVITE_MODO=senha` no `.env` é o modo atual. Quando o envio de e-mail for configurado
+(na nuvem), `CONVITE_MODO=email` fará o cadastro enviar um convite em vez de mostrar a senha.
 
 ## Segurança
 
@@ -62,6 +74,8 @@ direta). A pessoa é obrigada a trocá-la no primeiro acesso.
 - 5 senhas erradas numa conta → conta bloqueada 15 min; 30 erros do mesmo IP → IP bloqueado 15 min.
 - Gravações vindas de outro site são recusadas (verificação de origem).
 - Cada registro guarda quem criou, quem alterou por último e quem excluiu.
+- A tela e as rotas de usuários só respondem a administradores (usuário comum recebe 403).
+- Trocar o papel, redefinir a senha ou desativar alguém encerra as sessões dessa pessoa.
 - A pasta `api/` (com o `.env`) nunca é servida para o navegador.
 
 ## Ver os dados
@@ -93,6 +107,10 @@ Só insere registros novos; nunca altera nem apaga o que já está no banco.
 | POST | `/api/auth/logout` | não | sai |
 | GET | `/api/auth/eu` | não | quem está logado (401 se ninguém) |
 | POST | `/api/auth/senha` | sim | troca a senha |
+| GET | `/api/admin/usuarios` | admin | lista usuários |
+| POST | `/api/admin/usuarios` | admin | cadastra (`{ email, nome, papel }`) |
+| POST | `/api/admin/usuarios/:id/redefinir` | admin | nova senha provisória |
+| PATCH | `/api/admin/usuarios/:id` | admin | `{ ativo }`, `{ papel }` ou `{ nome }` |
 | GET | `/api/registros` | sim | registros ativos (`?incluirExcluidos=1` para todos) |
 | GET | `/api/registros/:id` | sim | um registro |
 | PUT | `/api/registros/:id` | sim | cria ou atualiza |
