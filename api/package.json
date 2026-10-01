@@ -7,13 +7,13 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "importar": "node importar-backup.js"
+    "importar": "node importar-backup.js",
+    "usuarios": "node usuarios.js"
   },
   "engines": {
     "node": ">=18"
   },
   "dependencies": {
-    "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "mongodb": "^6.12.0"

@@ -2,52 +2,95 @@
    API dos registros de campo — Campo IAM · Maringá
    Rodar:  npm install   (só na primeira vez)
            npm run dev   (reinicia sozinho quando o código muda)
+   Abrir:  http://localhost:3000   ← a própria API serve a página
 
-   Rotas:
-     GET    /api/saude                    → verifica API + banco
-     GET    /api/registros                → registros ativos
-     GET    /api/registros?incluirExcluidos=1
+   Rotas públicas:
+     GET    /api/saude
+     POST   /api/auth/login           { email, senha }
+     POST   /api/auth/logout
+     GET    /api/auth/eu              → quem está logado
+   Rotas que exigem login:
+     POST   /api/auth/senha           { senhaAtual, novaSenha }
+     GET    /api/registros            (?incluirExcluidos=1)
      GET    /api/registros/:id
-     PUT    /api/registros/:id            → cria ou atualiza
-     DELETE /api/registros/:id            → exclusão marcada (não apaga)
-     POST   /api/fotos                    → envia imagem (corpo = arquivo)
+     PUT    /api/registros/:id        → cria ou atualiza
+     DELETE /api/registros/:id        → exclusão marcada (não apaga)
+     POST   /api/fotos                → envia imagem (corpo = arquivo)
      GET    /api/fotos/:id
      DELETE /api/fotos/:id
+     GET    /data/*.geojson           → camadas do mapa
    ═══════════════════════════════════════════════════════════════ */
 require('dotenv').config();
 const crypto = require('crypto');
+const path = require('path');
 const express = require('express');
-const cors = require('cors');
 const { conectar, paraFeature } = require('./db');
 const { validarId, validarRegistro } = require('./registro');
+const { criarAuth } = require('./auth');
 
-const PORT = Number(process.env.PORT) || 3000;
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
-const MONGODB_DB = process.env.MONGODB_DB || 'campo_iam';
-const ORIGENS = (process.env.CORS_ORIGINS || '').split(',').map(s => s.trim()).filter(Boolean);
-const LOCALHOST = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/;
+const PRODUCAO = process.env.NODE_ENV === 'production';
+const CONFIG = {
+  porta: Number(process.env.PORT) || 3000,
+  mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017',
+  mongoDb: process.env.MONGODB_DB || 'campo_iam',
+  sessaoDias: Number(process.env.SESSAO_DIAS) || 7,
+  // em produção (HTTPS) o cookie só trafega criptografado
+  cookieSeguro: process.env.COOKIE_SEGURO ? process.env.COOKIE_SEGURO === '1' : PRODUCAO,
+  // atrás de um balanceador/proxy (nuvem), para saber o IP real de quem acessa
+  trustProxy: process.env.TRUST_PROXY || (PRODUCAO ? 1 : false),
+};
+const RAIZ_SITE = path.join(__dirname, '..');   // pasta com index.html, css/, js/, data/
 const TIPOS_FOTO = /^image\/(jpeg|png|webp|gif|heic|heif)$/;
 const MAX_FOTO = 15 * 1024 * 1024; // 15 MB
 
-function criarApp({ registros, fotos, db }) {
-  const app = express();
+const quem = u => ({ id: u._id, nome: u.nome });
 
-  // Quem pode chamar a API a partir do navegador
-  app.use(cors({
-    origin(origem, cb) {
-      if (!origem) return cb(null, true); // chamadas fora do navegador (curl, scripts)
-      const liberado = ORIGENS.length ? ORIGENS.includes(origem) : LOCALHOST.test(origem);
-      cb(null, liberado);
-    },
-  }));
+function criarApp(conexao) {
+  const { registros, fotos, db } = conexao;
+  const auth = criarAuth({ ...conexao, config: CONFIG });
+  const app = express();
+  app.disable('x-powered-by');
+  if (CONFIG.trustProxy) app.set('trust proxy', CONFIG.trustProxy);
+
+  /* ─── cabeçalhos de segurança ───────────── */
+  app.use((req, res, next) => {
+    res.set({
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'Referrer-Policy': 'same-origin',
+      'Cross-Origin-Opener-Policy': 'same-origin',
+      'Permissions-Policy': 'camera=(), microphone=(), geolocation=(self)',
+    });
+    if (CONFIG.cookieSeguro) res.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    next();
+  });
+
+  /* ─── gravações só a partir da própria página ───
+     Bloqueia outro site tentando agir em nome de quem está logado. */
+  app.use((req, res, next) => {
+    if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+    const origem = req.get('Origin');
+    if (origem) {
+      let host = null;
+      try { host = new URL(origem).host; } catch (e) {}
+      if (host !== req.get('Host')) return res.status(403).json({ erro: 'origem não permitida' });
+    }
+    next();
+  });
+
   app.use(express.json({ limit: '1mb' }));
 
   const api = express.Router();
 
   api.get('/saude', async (req, res) => {
     await db.command({ ping: 1 });
-    res.json({ ok: true, banco: db.databaseName });
+    res.json({ ok: true });
   });
+
+  auth.rotas(api);
+
+  /* daqui para baixo, tudo exige login */
+  api.use(auth.exigirLogin);
 
   /* ─── registros ─────────────────────────── */
   api.get('/registros', async (req, res) => {
@@ -79,12 +122,13 @@ function criarApp({ registros, fotos, db }) {
     const set = { type: 'Feature', geometry };
     for (const [k, v] of Object.entries(properties)) set['properties.' + k] = v;
     set['properties.atualizadoEm'] = agora;
+    set['properties.atualizadoPor'] = quem(req.usuario);
     set['properties.excluido'] = false;
     set['properties.excluidoEm'] = null;
 
     const doc = await registros.findOneAndUpdate(
       { _id: id },
-      { $set: set, $setOnInsert: { 'properties.criadoEm': agora } },
+      { $set: set, $setOnInsert: { 'properties.criadoEm': agora, 'properties.criadoPor': quem(req.usuario) } },
       { upsert: true, returnDocument: 'after' },
     );
     res.status(existente ? 200 : 201).json(paraFeature(doc));
@@ -95,7 +139,7 @@ function criarApp({ registros, fotos, db }) {
     const agora = new Date().toISOString();
     const r = await registros.updateOne(
       { _id: req.params.id },
-      { $set: { 'properties.excluido': true, 'properties.excluidoEm': agora, 'properties.atualizadoEm': agora } },
+      { $set: { 'properties.excluido': true, 'properties.excluidoEm': agora, 'properties.excluidoPor': quem(req.usuario), 'properties.atualizadoEm': agora } },
     );
     if (!r.matchedCount) return res.status(404).json({ erro: 'registro não encontrado' });
     res.status(204).end();
@@ -109,7 +153,7 @@ function criarApp({ registros, fotos, db }) {
 
     const id = crypto.randomUUID();
     await new Promise((ok, falha) => {
-      fotos.openUploadStreamWithId(id, id, { metadata: { tipo, criadoEm: new Date().toISOString() } })
+      fotos.openUploadStreamWithId(id, id, { metadata: { tipo, criadoEm: new Date().toISOString(), criadoPor: quem(req.usuario) } })
         .on('finish', ok).on('error', falha)
         .end(req.body);
     });
@@ -133,9 +177,23 @@ function criarApp({ registros, fotos, db }) {
   });
 
   api.use((req, res) => res.status(404).json({ erro: 'rota não encontrada' }));
-
   app.use('/api', api);
-  app.get('/', (req, res) => res.type('text').send('API Campo IAM rodando. Teste: /api/saude'));
+
+  /* ─── a página ──────────────────────────────
+     Só estas pastas são servidas. A pasta api/ (com o .env) NUNCA é exposta. */
+  app.get('/js/config.js', (req, res) => {
+    // quando a página vem da API, os registros vão para a API (com login)
+    res.type('application/javascript').set('Cache-Control', 'no-cache')
+      .send("window.CAMPO_CONFIG = { apiUrl: '/api' };\n");
+  });
+  const estatico = { dotfiles: 'deny', index: false, fallthrough: true };
+  app.use('/css', express.static(path.join(RAIZ_SITE, 'css'), estatico));
+  app.use('/js', express.static(path.join(RAIZ_SITE, 'js'), estatico));
+  // as camadas do mapa são dados do cliente → só com login
+  app.use('/data', auth.exigirLogin, express.static(path.join(RAIZ_SITE, 'data'), estatico));
+  app.get(['/', '/index.html'], (req, res) => {
+    res.set('Cache-Control', 'no-cache').sendFile(path.join(RAIZ_SITE, 'index.html'));
+  });
 
   // erros inesperados
   app.use((err, req, res, next) => {
@@ -151,20 +209,22 @@ function criarApp({ registros, fotos, db }) {
 async function iniciar() {
   let conexao;
   try {
-    conexao = await conectar(MONGODB_URI, MONGODB_DB);
+    conexao = await conectar(CONFIG.mongoUri, CONFIG.mongoDb);
   } catch (e) {
-    console.error(`\n✖ Não foi possível conectar ao MongoDB em ${MONGODB_URI}`);
+    console.error(`\n✖ Não foi possível conectar ao MongoDB em ${CONFIG.mongoUri}`);
     console.error('  Verifique se o MongoDB está instalado e o serviço "MongoDB Server" está rodando.');
     console.error('  Detalhe:', e.message, '\n');
     process.exit(1);
   }
+  const total = await conexao.usuarios.countDocuments({});
   const app = criarApp(conexao);
-  const servidor = app.listen(PORT, () => {
-    console.log(`\n✔ API rodando em http://localhost:${PORT}/api  (banco "${MONGODB_DB}")`);
-    console.log(`  Teste no navegador: http://localhost:${PORT}/api/saude\n`);
+  const servidor = app.listen(CONFIG.porta, () => {
+    console.log(`\n✔ Campo IAM rodando em http://localhost:${CONFIG.porta}  (banco "${CONFIG.mongoDb}")`);
+    if (!total) console.log('  ⚠ Nenhum usuário cadastrado. Crie o primeiro com:\n    npm run usuarios -- criar seu@email.com "Seu Nome" --admin');
+    console.log('');
   });
   servidor.on('error', e => {
-    if (e.code === 'EADDRINUSE') console.error(`\n✖ A porta ${PORT} já está em uso. Feche o outro programa ou mude PORT no .env.\n`);
+    if (e.code === 'EADDRINUSE') console.error(`\n✖ A porta ${CONFIG.porta} já está em uso. Feche o outro programa ou mude PORT no .env.\n`);
     else console.error(e);
     process.exit(1);
   });

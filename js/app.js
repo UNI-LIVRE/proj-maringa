@@ -102,26 +102,116 @@ let pendingImport=null, legendCollapsed=false;
 
 /* ═══════════ INIT ═══════════ */
 async function init(){
-  await loadData();
-  try{
-    const info=await Store.init();
-    records=(await Store.listarRegistros()).map(featureToRec);
-    renderModo(info);
-    if(info.falhaApi)toast('API local não respondeu — salvando só neste navegador. Veja se o "npm run dev" está rodando.');
-    else if(info.migrados)toast(`${info.migrados} registro(s) antigo(s) convertido(s) para o novo formato ✓`);
-  }catch(e){
-    console.error('Armazenamento indisponível',e);
-    renderModo(null);
-    toast('Não foi possível carregar os registros de campo: '+(e.message||e));
+  let info=null;
+  try{info=await Store.init();}
+  catch(e){console.error('Armazenamento indisponível',e);}
+  renderModo(info);
+
+  // modo banco de dados: precisa entrar antes de ver qualquer dado
+  if(info&&Store.temLogin){
+    usuario=info.usuario||await pedirLogin();
+    if(usuario.trocarSenha)usuario=await pedirSenha(true);
+    renderUsuario();
   }
+
+  await loadData();
+  try{records=(await Store.listarRegistros()).map(featureToRec);}
+  catch(e){console.error(e);toast('Não foi possível carregar os registros de campo: '+(e.message||e));}
   initMap();renderStats();renderPhases();renderLayers();renderList();
+
+  if(info&&info.falhaApi)toast('API não respondeu — salvando só neste navegador.');
+  else if(info&&info.migrados)toast(`${info.migrados} registro(s) antigo(s) convertido(s) para o novo formato ✓`);
+  else if(!info)toast('Não foi possível abrir o armazenamento. Os registros não serão salvos.');
 }
+
+/* ═══════════ LOGIN ═══════════ */
+let usuario=null, loginResolver=null, senhaResolver=null;
+
+function pedirLogin(){
+  if(loginResolver)return loginResolver.promise;
+  let resolve;const promise=new Promise(r=>resolve=r);
+  loginResolver={promise,resolve};
+  document.getElementById('lErro').textContent='';
+  document.getElementById('lSenha').value='';
+  document.getElementById('loginOverlay').classList.add('open');
+  setTimeout(()=>{const e=document.getElementById('lEmail');(e.value?document.getElementById('lSenha'):e).focus();},50);
+  return promise;
+}
+async function doLogin(){
+  const email=document.getElementById('lEmail').value.trim(),senha=document.getElementById('lSenha').value;
+  const btn=document.getElementById('lBtn'),erro=document.getElementById('lErro');
+  btn.disabled=true;erro.textContent='';
+  try{
+    const u=await Store.login(email,senha);
+    document.getElementById('lSenha').value='';
+    document.getElementById('loginOverlay').classList.remove('open');
+    const r=loginResolver;loginResolver=null;r&&r.resolve(u);
+  }catch(e){
+    erro.textContent=e.status===401?'E-mail ou senha incorretos.':(e.message||'Não foi possível entrar.');
+  }finally{btn.disabled=false;}
+}
+async function doLogout(){
+  try{await Store.logout();}catch(e){}
+  location.reload();
+}
+
+function pedirSenha(obrigatoria){
+  if(senhaResolver)return senhaResolver.promise;
+  let resolve;const promise=new Promise(r=>resolve=r);
+  senhaResolver={promise,resolve};
+  ['sAtual','sNova','sConf'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('sUser').value=usuario?usuario.email:'';
+  document.getElementById('sErro').textContent='';
+  document.getElementById('sAviso').style.display=obrigatoria?'block':'none';
+  document.getElementById('sFechar').style.display=obrigatoria?'none':'';
+  document.getElementById('sTitulo').textContent=obrigatoria?'Crie sua senha':'Trocar senha';
+  document.getElementById('senhaOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('sAtual').focus(),50);
+  return promise;
+}
+function openSenha(){pedirSenha(false).then(u=>{if(u){usuario=u;renderUsuario();toast('Senha alterada ✓');}});}
+function closeSenha(){
+  document.getElementById('senhaOverlay').classList.remove('open');
+  const r=senhaResolver;senhaResolver=null;r&&r.resolve(null);
+}
+async function doTrocarSenha(){
+  const atual=document.getElementById('sAtual').value,nova=document.getElementById('sNova').value,conf=document.getElementById('sConf').value;
+  const erro=document.getElementById('sErro'),btn=document.getElementById('sBtn');
+  erro.textContent='';
+  if(nova!==conf){erro.textContent='As duas senhas novas não são iguais.';return;}
+  if(nova.length<10){erro.textContent='A nova senha precisa ter pelo menos 10 caracteres.';return;}
+  btn.disabled=true;
+  try{
+    const u=await Store.trocarSenha(atual,nova);
+    document.getElementById('senhaOverlay').classList.remove('open');
+    const r=senhaResolver;senhaResolver=null;r&&r.resolve(u);
+  }catch(e){erro.textContent=e.message?e.message.charAt(0).toUpperCase()+e.message.slice(1)+'.':'Não foi possível trocar a senha.';}
+  finally{btn.disabled=false;}
+}
+function renderUsuario(){
+  const el=document.getElementById('userEl');if(!el)return;
+  if(!usuario){el.style.display='none';return;}
+  document.getElementById('userBtn').textContent='👤 '+usuario.nome.split(' ')[0];
+  document.getElementById('userBtn').title=usuario.nome+' ('+usuario.email+') — clique para trocar a senha';
+  el.style.display='inline-flex';
+}
+// a sessão venceu no meio do uso → volta ao login sem perder o que está na tela
+window.addEventListener('campo:precisa-login',()=>{
+  if(loginResolver)return;
+  toast('Sua sessão expirou. Entre de novo e repita a última ação.');
+  pedirLogin().then(async u=>{usuario=u;if(u.trocarSenha)usuario=await pedirSenha(true);renderUsuario();});
+});
+window.addEventListener('campo:precisa-trocar-senha',()=>{pedirSenha(true).then(u=>{if(u){usuario=u;renderUsuario();}});});
 
 /* Indicador no cabeçalho: onde os registros estão sendo salvos */
 function renderModo(info){
   const el=document.getElementById('modoEl');if(!el)return;
   let txt,cor,dica;
-  if(info&&info.modo==='api'){txt='● Banco de dados';cor='#1A9B6C';dica='Registros salvos no MongoDB pela API ('+info.apiUrl+')';}
+  if(info&&info.modo==='api'){
+    txt='● Banco de dados';cor='#1A9B6C';dica='Registros salvos no banco de dados, compartilhados com a equipe';
+    const n=document.getElementById('noteEl');
+    if(n)n.innerHTML='<strong>● Conectado ao banco de dados</strong>Os registros ficam salvos no servidor e a equipe toda vê as mesmas informações.';
+  }
   else if(info&&info.modo==='navegador'){
     txt=info.falhaApi?'● Navegador (API offline)':'● Navegador';cor=info.falhaApi?'#C87F00':'#6B7280';
     dica='Registros salvos só neste navegador'+(info.falhaApi?' — a API em '+info.apiUrl+' não respondeu':'');
@@ -135,7 +225,8 @@ function featureToRec(f){
   const p=f.properties||{},c=f.geometry&&f.geometry.coordinates;
   return{id:f.id,lat:c?c[1]:null,lng:c?c[0]:null,rua:p.rua||'',bairro:p.bairro||'',
     fase:p.fase||'diagnostico',status:p.status||'nao_iniciado',ativ:p.atividade||'',tec:p.tecnico||'',
-    data:p.data||'',obs:p.obs||'',fotos:p.fotos||[],criadoEm:p.criadoEm,atualizadoEm:p.atualizadoEm};
+    data:p.data||'',obs:p.obs||'',fotos:p.fotos||[],criadoEm:p.criadoEm,atualizadoEm:p.atualizadoEm,
+    por:(p.atualizadoPor||p.criadoPor||{}).nome||''};
 }
 
 /* ═══════════ MAP ═══════════ */
@@ -281,6 +372,7 @@ function addPinMkr(r){
       <div style="font-size:12px;color:#374151;margin-top:5px">${esc(r.ativ||'')} · ${PHLBL[r.fase]||''}</div>
       <div style="font-size:12px;color:#6B7280;margin-top:3px">👷 ${esc(r.tec)} · ${r.data||''}</div>
       ${r.obs?`<div style="font-size:12px;color:#374151;margin-top:4px;font-style:italic">${esc(r.obs)}</div>`:''}
+      ${r.por?`<div style="font-size:11px;color:#9CA3AF;margin-top:4px">Atualizado por ${esc(r.por)}${r.atualizadoEm?' em '+new Date(r.atualizadoEm).toLocaleString('pt-BR',{dateStyle:'short',timeStyle:'short'}):''}</div>`:''}
       <button onclick="openForm('${r.id}')" style="margin-top:8px;width:100%;padding:5px;background:#1A9B6C;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">Editar</button>
     </div>`)
     .addTo(lgps['campo']);
@@ -476,13 +568,14 @@ async function saveRec(){
     closeForm();toast('Registro salvo ✓');
   }catch(e){
     console.error(e);
+    if(e&&(e.status===401||e.status===403))return; // a tela de login/troca de senha já explica
     toast('Erro ao salvar: '+(e&&e.name==='QuotaExceededError'?'sem espaço no navegador.':(e.message||e)));
   }
 }
 async function deleteRec(){
   const id=document.getElementById('fId').value;if(!id)return;
   if(!confirm('Excluir este registro?'))return;
-  try{await Store.excluirRegistro(id);}catch(e){console.error(e);toast('Erro ao excluir');return;}
+  try{await Store.excluirRegistro(id);}catch(e){console.error(e);if(e.status!==401&&e.status!==403)toast('Erro ao excluir');return;}
   const idx=records.findIndex(r=>r.id===id);
   if(idx>=0){if(records[idx]._mkr)lgps['campo'].removeLayer(records[idx]._mkr);records.splice(idx,1);}
   renderStats();renderPhases();renderLayers();renderList();closeForm();toast('Excluído');

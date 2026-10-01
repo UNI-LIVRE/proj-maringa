@@ -1,18 +1,15 @@
 /* ═══════════════════════════════════════════════════════════════
    config.js — onde os REGISTROS DE CAMPO são salvos
    ───────────────────────────────────────────────────────────────
-   apiUrl vazio      → salva só neste navegador (IndexedDB)
-   apiUrl preenchido → salva no MongoDB, pela API (pasta api/)
+   Este arquivo vale para o GitHub Pages e o Live Server:
+   apiUrl vazio → registros salvos só neste navegador, sem login
+   (modo demonstração).
 
-   Padrão atual:
-   • aberto pelo Live Server (localhost / 127.0.0.1) → API local
-   • aberto no GitHub Pages ou outro endereço       → navegador
-
-   Quando a API estiver na nuvem, troque o '' pelo endereço dela,
-   ex.: 'https://campo-iam-api.exemplo.com/api'
+   Quando a página é aberta pela API (http://localhost:3000 ou,
+   no futuro, o endereço na nuvem), a própria API entrega outra
+   versão deste arquivo com apiUrl: '/api' — e aí vale o banco
+   de dados, com login. Não é preciso editar nada aqui.
    ═══════════════════════════════════════════════════════════════ */
 window.CAMPO_CONFIG = {
-  apiUrl: ['localhost', '127.0.0.1'].includes(location.hostname)
-    ? 'http://localhost:3000/api'
-    : ''
+  apiUrl: ''
 };
