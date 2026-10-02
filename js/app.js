@@ -305,7 +305,7 @@ function renderModo(info){
   const el=document.getElementById('modoEl');if(!el)return;
   let txt,cor,dica;
   if(info&&info.modo==='api'){
-    txt='● Banco de dados';cor='#1A9B6C';dica='Registros salvos no banco de dados, compartilhados com a equipe';
+    txt='● Banco de dados';cor='#d9e6e1';dica='Registros salvos no banco de dados, compartilhados com a equipe';
     const n=document.getElementById('noteEl');
     if(n)n.innerHTML='<strong>● Conectado ao banco de dados</strong>Os registros ficam salvos no servidor e a equipe toda vê as mesmas informações.';
   }
