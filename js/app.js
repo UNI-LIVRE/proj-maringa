@@ -575,12 +575,13 @@ function renderLayers(){
   document.getElementById('layersM03El').innerHTML=buildLRows(m03);
   document.getElementById('layersBaseEl').innerHTML=buildLRows(base);
   document.getElementById('layersCampoEl').innerHTML=buildLRows(['campo']);
+  renderTodas();
 }
 function buildLRows(keys){
   return keys.map(k=>{
     const d=LDEFS[k],sw=buildSw(k,d),cnt=lcount(k);
     return `<div class="layer-row" onclick="toggleLayer('${k}')">
-      <input type="checkbox" id="chk_${k}" checked onclick="event.stopPropagation()" onchange="toggleLayer('${k}')">
+      <input type="checkbox" id="chk_${k}"${lvis[k]!==false?' checked':''} onclick="event.stopPropagation()" onchange="toggleLayer('${k}')">
       <div style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${sw}</div>
       <span class="llabel">${d.label}</span>
       <span class="lcount">${cnt}</span>
@@ -622,6 +623,18 @@ function toggleLayer(k){
   const c=document.getElementById('chk_'+k);if(c)c.checked=lvis[k];
   lvis[k]?map.addLayer(lgps[k]):map.removeLayer(lgps[k]);
   if(k==='areas_contrib')renderAreasContrib();
+  renderTodas();
+}
+/* liga/desliga uma camada para um estado definido (sem inverter) */
+function setLayer(k,v){if(!!lvis[k]!==!!v)toggleLayer(k);}
+/* "Mostrar todas as camadas": desmarcar limpa o mapa de uma vez */
+function setTodas(v){Object.keys(LDEFS).forEach(k=>setLayer(k,v));renderTodas();}
+function renderTodas(){
+  const chk=document.getElementById('chkTodas');if(!chk)return;
+  const keys=Object.keys(LDEFS),on=keys.filter(k=>lvis[k]).length;
+  chk.checked=on===keys.length;
+  chk.indeterminate=on>0&&on<keys.length;   // traço: algumas ligadas
+  const c=document.getElementById('todasCount');if(c)c.textContent=on+'/'+keys.length;
 }
 
 /* ═══════════ STATS & PHASES ═══════════ */
