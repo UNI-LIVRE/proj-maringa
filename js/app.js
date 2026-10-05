@@ -13,6 +13,7 @@ const LDEFS = {
   areas_prio:   {label:'Cadastro Microdrenagem', color:'#F97316', type:'polygon'},
   sec_feito:    {label:'Seção (concluída)',  color:'#059669', type:'point'},
   sec_pend:     {label:'Seção (pendente)',   color:'#9CA3AF', type:'point'},
+  areas_contrib:{label:'Áreas de contribuição (micro)', color:'#2E8B57', type:'polygon'},
 };
 
 /* ═══════════ DADOS (arquivos GeoJSON em /data) ═══════════ */
@@ -33,11 +34,12 @@ const DATA_FILES = {
   sec_pend:    'data/sec_pend.geojson',
   subbacias:   'data/subbacias.geojson',
   hidrografia: 'data/hidrografia.geojson',
+  areas_contrib: 'data/areas_contribuicao.geojson',
 };
 
 let DATA_LIDER=[], DATA_PRIO=[], DATA_SPT=[], DATA_AI=[], DATA_AREASPRIO=[],
     DATA_AC_PGS=[], DATA_AC_PTS=[], DATA_BLE=[], DATA_SECFEITO=[], DATA_SECPEND=[],
-    DATA_SUB=[], DATA_HIDRO=[];
+    DATA_SUB=[], DATA_HIDRO=[], DATA_AREASCONTRIB=[];
 
 // Converte GeoJSON para o formato interno usado pelo mapa:
 //   pontos  -> {…propriedades, lat, lng}
@@ -75,6 +77,7 @@ async function loadData(){
   DATA_AC_PTS = d.ac_pontos || [];   DATA_BLE = d.ble_guaipo || [];
   DATA_SECFEITO = d.sec_feito || []; DATA_SECPEND = d.sec_pend || [];
   DATA_SUB = d.subbacias || [];      DATA_HIDRO = d.hidrografia || [];
+  DATA_AREASCONTRIB = d.areas_contrib || [];
   if (failed.length) {
     const local = location.protocol === 'file:';
     toast(local
@@ -305,7 +308,7 @@ function renderModo(info){
   const el=document.getElementById('modoEl');if(!el)return;
   let txt,cor,dica;
   if(info&&info.modo==='api'){
-    txt='● Banco de dados';cor='#d9e6e1';dica='Registros salvos no banco de dados, compartilhados com a equipe';
+    txt='● Banco de dados';cor='#1A9B6C';dica='Registros salvos no banco de dados, compartilhados com a equipe';
     const n=document.getElementById('noteEl');
     if(n)n.innerHTML='<strong>● Conectado ao banco de dados</strong>Os registros ficam salvos no servidor e a equipe toda vê as mesmas informações.';
   }
@@ -361,7 +364,7 @@ function initMap(){
 
   Object.keys(LDEFS).forEach(k=>{lgps[k]=L.layerGroup().addTo(map);lvis[k]=true;});
 
-  addLider(); addPrio(); addSubbacias(); addAreasPrio(); addAcCriticas(); addAcPontos(); addBleGuaipo(); addHidro();
+  addLider(); addPrio(); addSubbacias(); addAreasPrio(); addAcCriticas(); addAreasContrib(); addAcPontos(); addBleGuaipo(); addHidro();
   addSondSpt(); addSondAi(); addSecFeito(); addSecPend();
   records.forEach(r=>addPinMkr(r));
 
@@ -447,18 +450,30 @@ function addSondAi(){
      .addTo(lgps['sond_ai']);
   });
 }
+/* popup das seções topográficas (feitas e pendentes) */
+function corDrenagem(d){
+  if(/ok$/i.test(d))return'#059669';           // Tubular/Ponte/Celular/BLE OK
+  if(/assoread/i.test(d))return'#C87F00';
+  return'#6B7280';                             // Pendente, Não existente…
+}
+function popupSecao(p,feito){
+  const linha=(txt,estilo)=>`<br><span style="font-size:11px;${estilo||'color:#555'}">${txt}</span>`;
+  let h=`<b>${esc(p.name)}</b>`;
+  if(p.cod)h+=linha(esc(p.cod));
+  if(p.bacia||p.micro)h+=linha(esc(p.bacia)+(p.bacia&&p.micro?' — ':'')+esc(p.micro));
+  h+=feito?linha('✓ Topografia Concluída','color:#059669;font-weight:600'):linha('⏳ Topografia Pendente','color:#DC2626;font-weight:600');
+  if(p.drenagem)h+=linha(`Drenagem: <b style="color:${corDrenagem(p.drenagem)}">${esc(p.drenagem)}</b>`);
+  if(typeof p.subida==='boolean')h+=linha(`Subida: <b>${p.subida?'sim':'não'}</b>`);
+  return h;
+}
 function addSecFeito(){
   DATA_SECFEITO.forEach(p=>{
-    L.marker([p.lat,p.lng],{icon:mkSecFeitoIcon()})
-     .bindPopup(`<b>${esc(p.name)}</b>${p.cod?'<br><span style="font-size:11px;color:#555">'+esc(p.cod)+'</span>':''}<br><span style="font-size:11px;color:#555">${esc(p.bacia)}${p.micro?' — '+esc(p.micro):''}</span><br><span style="font-size:11px;color:#059669;font-weight:600">✓ Topografia Concluída</span>`)
-     .addTo(lgps['sec_feito']);
+    L.marker([p.lat,p.lng],{icon:mkSecFeitoIcon()}).bindPopup(popupSecao(p,true)).addTo(lgps['sec_feito']);
   });
 }
 function addSecPend(){
   DATA_SECPEND.forEach(p=>{
-    L.marker([p.lat,p.lng],{icon:mkSecPendIcon()})
-     .bindPopup(`<b>${esc(p.name)}</b>${p.cod?'<br><span style="font-size:11px;color:#555">'+esc(p.cod)+'</span>':''}<br><span style="font-size:11px;color:#555">${esc(p.bacia)}${p.micro?' — '+esc(p.micro):''}</span><br><span style="font-size:11px;color:#DC2626;font-weight:600">⏳ Topografia Pendente</span>`)
-     .addTo(lgps['sec_pend']);
+    L.marker([p.lat,p.lng],{icon:mkSecPendIcon()}).bindPopup(popupSecao(p,false)).addTo(lgps['sec_pend']);
   });
 }
 function addPinMkr(r){
@@ -474,6 +489,81 @@ function addPinMkr(r){
     </div>`)
     .addTo(lgps['campo']);
   r._mkr=m;
+}
+
+/* ═══════════ ÁREAS DE CONTRIBUIÇÃO (micro) ═══════════
+   Polígonos coloridos pelo status, com filtro por status no menu lateral.
+   Dados: data/areas_contribuicao.geojson (id, status, bacia, area_ha).        */
+const AC_STATUS={
+  'Aprovado':    {cor:'#2E8B57',fill:.45,um:'aprovada',    varios:'aprovadas'},
+  'Realizada':   {cor:'#1F6FB5',fill:.5, um:'realizada',   varios:'realizadas'},
+  'Não aprovado':{cor:'#9CA3AF',fill:.3, um:'não aprovada',varios:'não aprovadas'},
+};
+const acOcultos=new Set();   // status desmarcados no filtro
+let acItens=[];              // [{p, layer}]
+const fmtHa=n=>n.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1});
+
+function addAreasContrib(){
+  acItens=DATA_AREASCONTRIB.map(p=>{
+    const st=AC_STATUS[p.status]||AC_STATUS['Não aprovado'];
+    const layer=L.polygon(p.coords,{color:st.cor,weight:1.4,fillColor:st.cor,fillOpacity:st.fill})
+      .bindPopup(`<b style="font-size:13px">Área de contribuição nº ${esc(p.id)}</b>`+
+        `<br><span style="font-size:11px;font-weight:600;color:${st.cor}">${esc(p.status)}</span>`+
+        `<br><span style="font-size:12px;color:#555">${p.bacia?esc(p.bacia):'Bacia não informada'}</span>`+
+        `<br><span style="font-size:12px;color:#555">${fmtHa(+p.area_ha||0)} ha</span>`)
+      .bindTooltip(String(p.id),{permanent:true,direction:'center',className:'ac-lbl'});
+    layer.addTo(lgps['areas_contrib']);
+    return {p,layer};
+  });
+  // números sobre os polígonos só com o mapa aproximado (evita poluir a visão geral)
+  const rotulos=()=>map.getContainer().classList.toggle('sem-rotulos',map.getZoom()<14);
+  map.on('zoomend',rotulos);rotulos();
+  renderAreasContrib();
+}
+function acVisivel(it){return !acOcultos.has(it.p.status);}
+function acAplicarFiltro(){
+  acItens.forEach(it=>{
+    const g=lgps['areas_contrib'];
+    if(acVisivel(it)){if(!g.hasLayer(it.layer))g.addLayer(it.layer);}
+    else if(g.hasLayer(it.layer))g.removeLayer(it.layer);
+  });
+  renderAreasContrib();
+}
+function acToggleStatus(s){acOcultos.has(s)?acOcultos.delete(s):acOcultos.add(s);acAplicarFiltro();}
+function acLimpar(){acOcultos.clear();acAplicarFiltro();}
+function acEnquadrar(){
+  const vis=acItens.filter(acVisivel);if(!vis.length)return;
+  if(!lvis['areas_contrib'])toggleLayer('areas_contrib');
+  map.flyToBounds(L.featureGroup(vis.map(it=>it.layer)).getBounds(),{padding:[40,40],duration:.7});
+}
+function renderAreasContrib(){
+  const el=document.getElementById('areasContribEl');if(!el)return;
+  const total=acItens.length,vis=acItens.filter(acVisivel);
+  const ha=vis.reduce((t,it)=>t+(+it.p.area_ha||0),0);
+  const por={};Object.keys(AC_STATUS).forEach(s=>por[s]={n:0,ha:0});
+  acItens.forEach(it=>{const q=por[it.p.status];if(q){q.n++;q.ha+=(+it.p.area_ha||0);}});
+  const det=Object.keys(AC_STATUS).map(s=>[s,vis.filter(it=>it.p.status===s).length]).filter(x=>x[1])
+    .map(([s,n])=>`<span><i class="mini" style="background:${AC_STATUS[s].cor}"></i>${n} ${n===1?AC_STATUS[s].um:AC_STATUS[s].varios}</span>`).join('');
+  const ligada=lvis['areas_contrib']!==false;
+  el.innerHTML=`<div class="fcard">
+    <div class="layer-row" onclick="toggleLayer('areas_contrib')">
+      <input type="checkbox" id="chk_areas_contrib"${ligada?' checked':''} onclick="event.stopPropagation()" onchange="toggleLayer('areas_contrib')">
+      <span class="llabel fcard-tit">${LDEFS.areas_contrib.label}</span>
+      <span class="lcount">${vis.length===total?total:vis.length+'/'+total}</span>
+    </div>
+    <div class="flab">Status</div>
+    ${Object.keys(AC_STATUS).map(s=>{const off=acOcultos.has(s),c=AC_STATUS[s].cor;
+      return `<label class="fopt${off?' off':''}"><input type="checkbox"${off?'':' checked'} onchange="acToggleStatus('${s}')">
+        <span class="sw" style="background:${c}${s==='Não aprovado'?'55':'aa'};border-color:${c}"></span>
+        <span>${s}</span><span class="n">${por[s].n}</span><span class="ha">${fmtHa(por[s].ha)} ha</span></label>`;}).join('')}
+    <div class="fsum">
+      <div class="t"><b>${vis.length}</b> de ${total} áreas &nbsp;·&nbsp; <b>${fmtHa(ha)} ha</b></div>
+      ${det?`<div class="det">${det}</div>`:''}
+      <div class="bt"><button class="fbtn p" onclick="acEnquadrar()"${vis.length&&ligada?'':' disabled'}>Enquadrar no mapa</button>
+        <button class="fbtn" onclick="acLimpar()"${acOcultos.size?'':' disabled'}>Limpar filtro</button></div>
+    </div></div>`;
+  // legenda flutuante
+  Object.keys(AC_STATUS).forEach(s=>{const e=document.getElementById('legAc_'+s.replace(/\W/g,''));if(e)e.textContent=por[s].n;});
 }
 
 /* ═══════════ LAYER TOGGLES ═══════════ */
@@ -524,12 +614,14 @@ function lcount(k){
   if(k==='ac_criticas') return DATA_AC_PGS.length;
   if(k==='ac_pontos')   return DATA_AC_PTS.length;
   if(k==='ble_guaipo')  return DATA_BLE.length;
+  if(k==='areas_contrib') return DATA_AREASCONTRIB.length;
   return records.filter(r=>r.lat).length;
 }
 function toggleLayer(k){
   lvis[k]=!lvis[k];
   const c=document.getElementById('chk_'+k);if(c)c.checked=lvis[k];
   lvis[k]?map.addLayer(lgps[k]):map.removeLayer(lgps[k]);
+  if(k==='areas_contrib')renderAreasContrib();
 }
 
 /* ═══════════ STATS & PHASES ═══════════ */

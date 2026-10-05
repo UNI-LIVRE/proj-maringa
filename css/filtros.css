@@ -1,0 +1,32 @@
+/* ═══════════════════════════════════════════════════════════════
+   filtros.css — cartão de camada com filtros (ex.: Áreas de contribuição)
+   Usa as mesmas variáveis de cor do style.css, então acompanha o tema escuro.
+   ═══════════════════════════════════════════════════════════════ */
+.fcard{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px 12px;margin-bottom:4px}
+.fcard .layer-row{padding:2px 0 8px;border-bottom:1px solid var(--border);margin-bottom:10px}
+.fcard .fcard-tit{font-weight:600;color:var(--text)}
+.flab{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:0 0 6px}
+.fopt{display:grid;grid-template-columns:14px 14px 1fr auto 66px;align-items:center;gap:8px;padding:4px 0;
+  font-size:12px;color:var(--text-2);cursor:pointer;user-select:none}
+.fopt input{width:14px;height:14px;accent-color:var(--green);margin:0;cursor:pointer}
+.fopt .sw{width:14px;height:14px;border-radius:3px;border:1.5px solid}
+.fopt .n{font-size:11px;color:var(--text-muted);background:var(--border);border-radius:10px;padding:1px 7px;text-align:center;min-width:26px}
+.fopt .ha{font-size:11px;color:var(--text-muted);text-align:right;font-variant-numeric:tabular-nums}
+.fopt.off{opacity:.45}
+.fsum{background:var(--green-lt);border-radius:8px;padding:10px 12px;margin-top:8px}
+.fsum .t{font-size:12px;color:var(--text-2);line-height:1.5}
+.fsum .t b{font-size:15px;color:var(--text)}
+.fsum .det{font-size:11px;color:var(--text-muted)}
+.fsum .det span{white-space:nowrap;margin-right:10px}
+.fsum .mini{display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:-1px;margin-right:5px}
+.fsum .bt{display:flex;gap:6px;margin-top:8px}
+.fbtn{flex:1;font:inherit;font-size:12px;font-weight:500;border:1px solid var(--border);background:var(--bg);color:var(--text-2);
+  border-radius:6px;padding:6px 10px;cursor:pointer;white-space:nowrap}
+.fbtn.p{background:var(--green);border-color:var(--green);color:#fff}
+.fbtn:disabled{opacity:.5;cursor:default}
+
+/* número da área sobre o polígono (só aparece com o mapa mais aproximado) */
+.ac-lbl{background:none;border:none;box-shadow:none;padding:0;font:600 11px Inter,system-ui,sans-serif;color:#1f2937;
+  text-shadow:0 0 3px #fff,0 0 3px #fff,0 0 3px #fff;pointer-events:none}
+.ac-lbl::before{display:none}
+.sem-rotulos .ac-lbl{display:none}
