@@ -35,3 +35,12 @@
 .layer-todas{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:4px 10px;margin:14px 0 4px;
   position:sticky;top:-12px;z-index:5;box-shadow:0 -12px 0 var(--surface),0 2px 6px rgba(0,0,0,.06)}   /* fica visível ao rolar o menu */
 .layer-todas .llabel{font-weight:600;color:var(--text)}
+
+/* levantamento de campo: pontos de eixo só com o mapa aproximado */
+.sem-eixo .mc-eixo{display:none}
+.mc-estr,.mc-eixo{background:none;border:none}
+
+/* ponto possivelmente repetido (outro do mesmo tipo a menos de 1 m) */
+.mc-rep::after,.mc-rep-ico{content:'';position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;
+  background:#FACC15;border:1px solid #78350F;box-sizing:border-box}
+.mc-rep-ico{display:inline-block;position:static;width:9px;height:9px}

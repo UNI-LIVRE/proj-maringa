@@ -2,7 +2,7 @@
 const LDEFS = {
   lider_areas:  {label:'Áreas LIDER',       color:'#C87F00', type:'polygon'},
   prio_erosao:  {label:'Prioridade Erosão',  color:'#DC2626', type:'point'},
-  ac_criticas:  {label:'Áreas Críticas (AC)',   color:'#B91C1C', type:'polygon'},
+  //ac_criticas:  {label:'Áreas Críticas (AC)',   color:'#B91C1C', type:'polygon'},
   ac_pontos:    {label:'Pontos Críticos META03', color:'#EF4444', type:'point'},
   ble_guaipo:   {label:'Cadastro BLE (Guaipó)', color:'#7C3AED', type:'point'},
   subbacias:    {label:'Subbacias IAM',      color:'#0E7490', type:'polygon'},
@@ -14,6 +14,7 @@ const LDEFS = {
   sec_feito:    {label:'Seção (concluída)',  color:'#059669', type:'point'},
   sec_pend:     {label:'Seção (pendente)',   color:'#9CA3AF', type:'point'},
   areas_contrib:{label:'Áreas de contribuição (micro)', color:'#2E8B57', type:'polygon'},
+  micro_campo:  {label:'Levantamento de campo', color:'#0284C7', type:'point'},
 };
 
 /* ═══════════ DADOS (arquivos GeoJSON em /data) ═══════════ */
@@ -27,7 +28,7 @@ const DATA_FILES = {
   sond_spt:    'data/sond_spt.geojson',
   sond_ai:     'data/sond_ai.geojson',
   areas_prio:  'data/areas_prio.geojson',
-  ac_criticas: 'data/ac_criticas.geojson',
+  //ac_criticas: 'data/ac_criticas.geojson',
   ac_pontos:   'data/ac_pontos.geojson',
   ble_guaipo:  'data/ble_guaipo.geojson',
   sec_feito:   'data/sec_feito.geojson',
@@ -35,11 +36,12 @@ const DATA_FILES = {
   subbacias:   'data/subbacias.geojson',
   hidrografia: 'data/hidrografia.geojson',
   areas_contrib: 'data/areas_contribuicao.geojson',
+  micro_campo:   'data/microdrenagem_campo.geojson',
 };
 
 let DATA_LIDER=[], DATA_PRIO=[], DATA_SPT=[], DATA_AI=[], DATA_AREASPRIO=[],
     DATA_AC_PGS=[], DATA_AC_PTS=[], DATA_BLE=[], DATA_SECFEITO=[], DATA_SECPEND=[],
-    DATA_SUB=[], DATA_HIDRO=[], DATA_AREASCONTRIB=[];
+    DATA_SUB=[], DATA_HIDRO=[], DATA_AREASCONTRIB=[], DATA_MICROCAMPO=[];
 
 // Converte GeoJSON para o formato interno usado pelo mapa:
 //   pontos  -> {…propriedades, lat, lng}
@@ -78,6 +80,7 @@ async function loadData(){
   DATA_SECFEITO = d.sec_feito || []; DATA_SECPEND = d.sec_pend || [];
   DATA_SUB = d.subbacias || [];      DATA_HIDRO = d.hidrografia || [];
   DATA_AREASCONTRIB = d.areas_contrib || [];
+  DATA_MICROCAMPO = d.micro_campo || [];
   if (failed.length) {
     const local = location.protocol === 'file:';
     toast(local
@@ -364,7 +367,7 @@ function initMap(){
 
   Object.keys(LDEFS).forEach(k=>{lgps[k]=L.layerGroup().addTo(map);lvis[k]=true;});
 
-  addLider(); addPrio(); addSubbacias(); addAreasPrio(); addAcCriticas(); addAreasContrib(); addAcPontos(); addBleGuaipo(); addHidro();
+  addLider(); addPrio(); addSubbacias(); addAreasPrio(); /* addAcCriticas(); */ addAreasContrib(); addAcPontos(); addBleGuaipo(); addMicroCampo(); addHidro();
   addSondSpt(); addSondAi(); addSecFeito(); addSecPend();
   records.forEach(r=>addPinMkr(r));
 
@@ -566,10 +569,115 @@ function renderAreasContrib(){
   Object.keys(AC_STATUS).forEach(s=>{const e=document.getElementById('legAc_'+s.replace(/\W/g,''));if(e)e.textContent=por[s].n;});
 }
 
+/* ═══════════ LEVANTAMENTO DE CAMPO — MICRODRENAGEM ═══════════
+   Estruturas vistoriadas (bocas de lobo/leão, PV, boca combinada) e pontos
+   de eixo da rua (esquina, ponto alto, ponto baixo).
+   Dados: data/microdrenagem_campo.geojson — uma entrega nova é somada pelo "id".
+   Pontos repetidos (mesmo grupo a menos de 1 m) já saem do arquivo com um só ponto;
+   os ids retirados ficam no campo "tambem" do ponto mantido.   */
+const MC_TIPOS={
+  BLO:    {nome:'Boca de lobo',      cor:'#0284C7', forma:'quad'},
+  BLE:    {nome:'Boca de leão',      cor:'#4338CA', forma:'quad'},
+  BLC:    {nome:'Boca combinada',    cor:'#0F766E', forma:'quad'},
+  PV:     {nome:'Poço de visita',    cor:'#334155', forma:'circ'},
+  CC:     {nome:'Caixa de coleta',   cor:'#9D174D', forma:'quad'},
+  MGI:    {nome:'Ponto de lançamento', cor:'#15803D', forma:'losango', lanc:true},
+  MGS:    {nome:'Ponto de lançamento', cor:'#15803D', forma:'losango', lanc:true},
+  ESQUINA:{nome:'Esquina (eixo)',    cor:'#6B7280', forma:'ponto', eixo:true},
+  PTOALT: {nome:'Ponto alto (eixo)', cor:'#6B7280', forma:'tri',   eixo:true},
+  PTOBAI: {nome:'Ponto baixo (eixo)',cor:'#2563EB', forma:'triv',  eixo:true},
+};
+const MC_OBSTR={total:'#DC2626',parcial:'#F59E0B'};
+/* obstrução mais grave entre a superior e a de fundo */
+function mcObstr(p){
+  if(p.obstr_sup==='Total'||p.obstr_fundo==='Total')return'total';
+  if(p.obstr_sup==='Parcial'||p.obstr_fundo==='Parcial')return'parcial';
+  return null;
+}
+/* desenho do ícone. Borda: vermelha = obstrução total, laranja = parcial, branca = livre;
+   tracejada = inacessível */
+function mcSvg(codigo,obstr,inac,tam){
+  const t=MC_TIPOS[codigo]||MC_TIPOS.BLO, c=t.cor, w=tam, h=tam;
+  const borda=obstr?MC_OBSTR[obstr]:(inac?'#374151':'#fff'), bw=(obstr||inac)?2.4:1.4, tr=inac?' stroke-dasharray="3,2"':'';
+  let f;
+  if(t.forma==='quad') f=`<rect x="${bw/2+1}" y="${bw/2+1}" width="${w-bw-2}" height="${h-bw-2}" rx="2" fill="${c}" stroke="${borda}" stroke-width="${bw}"${tr}/>`;
+  else if(t.forma==='circ') f=`<circle cx="${w/2}" cy="${h/2}" r="${w/2-bw/2-1}" fill="${c}" stroke="${borda}" stroke-width="${bw}"${tr}/><circle cx="${w/2}" cy="${h/2}" r="${w/6}" fill="#fff"/>`;
+  else if(t.forma==='ponto') f=`<circle cx="${w/2}" cy="${h/2}" r="${w/2-1.5}" fill="${c}" stroke="#fff" stroke-width="1.2"/>`;
+  else if(t.forma==='losango') f=`<polygon points="${w/2},1 ${w-1},${h/2} ${w/2},${h-1} 1,${h/2}" fill="${c}" stroke="#fff" stroke-width="1.4"/>`;
+  else if(t.forma==='tri') f=`<polygon points="${w/2},1.5 ${w-1.5},${h-1.5} 1.5,${h-1.5}" fill="${c}" stroke="#fff" stroke-width="1.2"/>`;
+  else f=`<polygon points="1.5,1.5 ${w-1.5},1.5 ${w/2},${h-1.5}" fill="${c}" stroke="#fff" stroke-width="1.2"/>`;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${f}</svg>`;
+}
+function mcPopup(p){
+  const t=MC_TIPOS[p.codigo]||{nome:p.tipo||p.codigo,cor:'#555'};
+  const v=x=>x===null||x===undefined||x===''?'—':esc(x);
+  const lin=(rot,val)=>`<tr><td style="color:#6B7280;padding:1px 8px 1px 0;white-space:nowrap">${rot}</td><td style="padding:1px 0">${val}</td></tr>`;
+  const ob=mcObstr(p), eixo=MC_TIPOS[p.codigo]&&MC_TIPOS[p.codigo].eixo;
+  let h=`<div style="min-width:210px"><b style="font-size:13px;color:${t.cor}">${esc(t.nome)}</b>`+
+    `<div style="font-size:11px;color:#6B7280;margin-top:1px">${esc(p.id)} · equipe ${esc(p.equipe)} · nº ${esc(p.num)}</div>`;
+  const selo=(txt,cor)=>`<span style="background:${cor};color:#fff;border-radius:4px;padding:1px 7px;font-size:11px;margin-right:4px">${txt}</span>`;
+  if(!eixo&&(ob||p.inacessivel))h+=`<div style="margin-top:5px">${ob?selo(ob==='total'?'Obstrução total':'Obstrução parcial',MC_OBSTR[ob]):''}${p.inacessivel?selo('Inacessível','#374151'):''}</div>`;
+  if(p._rep&&p._rep.length)h+=`<div style="margin-top:6px;background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:4px 7px;font-size:11px;color:#78350F">⚠ Possível ponto repetido:<br>${p._rep.map(r=>`${esc(r.id)} (${esc(r.tipo)}, eq. ${esc(r.equipe)}, ${esc(r.entrega)}) a ${r.d.toLocaleString('pt-BR',{maximumFractionDigits:2})} m`).join('<br>')}</div>`;
+  h+=`<table style="font-size:12px;margin-top:6px;border-collapse:collapse">`;
+  if(t.lanc){
+    h+=lin('Diâmetro do tubo',p.lanc_diam_cm!=null?esc(p.lanc_diam_cm)+' cm':'—');
+  }else if(!eixo){
+    h+=lin('Condição',v(p.condicao))+
+      lin('Obstr. superior',p.obstr_sup&&p.obstr_sup!=='Não'?`${esc(p.obstr_sup)} (${esc(p.obstr_sup_tipo)})`:v(p.obstr_sup))+
+      lin('Obstr. fundo',p.obstr_fundo&&p.obstr_fundo!=='Não'?`${esc(p.obstr_fundo)} (${esc(p.obstr_fundo_tipo)})`:v(p.obstr_fundo))+
+      lin('Profundidade',p.profundidade_cm!=null?esc(p.profundidade_cm)+' cm':'—')+
+      lin('Tubos',p.n_tubos?`${esc(p.n_tubos)} — ${v(p.tubos)}`:'—')+
+      lin('Material',v(p.material))+lin('Tampa',v(p.tampa))+lin('Caixa',v(p.cc_tipo))+lin('Posição',v(p.posicao));
+  }
+  h+=lin('Cota (ortom.)',p.h_ortom!=null?(+p.h_ortom).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:3})+' m':'—')+
+    lin('Área crítica',v(p.area_critica))+
+    lin('UTM',p.utm_E!=null?`${(+p.utm_E).toFixed(2)} E / ${(+p.utm_N).toFixed(2)} N`:'—')+
+    lin('Levantamento',v(p.entrega))+
+    (p.tambem?lin('Também registrado',esc(p.tambem).replace(/; /g,'<br>')):'');
+  return h+'</table></div>';
+}
+/* Marca pontos possivelmente repetidos: mesmo tipo (ou duas bocas) a menos de 1 m,
+   com id diferente. Pares esquina + ponto alto/baixo no mesmo lugar são de propósito e não entram.
+   Só aponta no popup — não apaga nada. */
+const MC_REP_DIST=1, MC_BOCAS=['BLO','BLE','BLC'];
+function mcMarcarRepetidos(){
+  const g=new Map(), cel=2, xy=p=>[+p.utm_E,+p.utm_N];
+  DATA_MICROCAMPO.forEach(p=>{p._rep=[];if(p.utm_E==null)return;const[x,y]=xy(p),k=Math.floor(x/cel)+','+Math.floor(y/cel);(g.get(k)||g.set(k,[]).get(k)).push(p);});
+  const mesmo=(a,b)=>a.codigo===b.codigo||(MC_BOCAS.includes(a.codigo)&&MC_BOCAS.includes(b.codigo));
+  let n=0;
+  DATA_MICROCAMPO.forEach(p=>{if(p.utm_E==null)return;const[x,y]=xy(p),cx=Math.floor(x/cel),cy=Math.floor(y/cel);
+    for(let i=-1;i<=1;i++)for(let j=-1;j<=1;j++)(g.get((cx+i)+','+(cy+j))||[]).forEach(q=>{
+      if(q===p||q.id===p.id||!mesmo(p,q))return;const[x2,y2]=xy(q),d=Math.hypot(x-x2,y-y2);
+      if(d<MC_REP_DIST){p._rep.push({id:q.id,tipo:(MC_TIPOS[q.codigo]||{}).nome||q.codigo,equipe:q.equipe,entrega:q.entrega,d});n++;}
+    });});
+  return n/2;
+}
+function addMicroCampo(){
+  const nRep=mcMarcarRepetidos();
+  // pontos de eixo por baixo, estruturas por cima
+  const ord=[...DATA_MICROCAMPO].sort((a,b)=>(MC_TIPOS[a.codigo]&&MC_TIPOS[a.codigo].eixo?0:1)-(MC_TIPOS[b.codigo]&&MC_TIPOS[b.codigo].eixo?0:1));
+  ord.forEach(p=>{
+    const t=MC_TIPOS[p.codigo]||MC_TIPOS.BLO, tam=t.eixo?10:14;
+    const ic=L.divIcon({html:mcSvg(p.codigo,t.eixo?null:mcObstr(p),!t.eixo&&!!p.inacessivel,tam),className:(t.eixo?'mc-eixo':'mc-estr')+(p._rep&&p._rep.length?' mc-rep':''),iconSize:[tam,tam],iconAnchor:[tam/2,tam/2],popupAnchor:[0,-tam/2]});
+    L.marker([p.lat,p.lng],{icon:ic,zIndexOffset:t.eixo?-100:100}).bindPopup(mcPopup(p)).addTo(lgps['micro_campo']);
+  });
+  // pontos de eixo só aparecem com o mapa aproximado (evita poluir a visão geral)
+  const eixo=()=>map.getContainer().classList.toggle('sem-eixo',map.getZoom()<16);
+  map.on('zoomend',eixo);eixo();
+  // contagens da legenda
+  const n={rep:nRep};DATA_MICROCAMPO.forEach(p=>{n[p.codigo]=(n[p.codigo]||0)+1;if(MC_TIPOS[p.codigo]&&MC_TIPOS[p.codigo].lanc)n.LANC=(n.LANC||0)+1;if((MC_TIPOS[p.codigo]||{}).eixo)return;
+    const o=mcObstr(p);if(o)n[o]=(n[o]||0)+1;if(p.inacessivel)n.inacessivel=(n.inacessivel||0)+1;});
+  document.querySelectorAll('[data-mc]').forEach(e=>e.textContent=n[e.dataset.mc]||0);
+  const lr=document.getElementById('legMcRep');if(lr)lr.style.display=nRep?'':'none';
+  const leg={total:['total',false],parcial:['parcial',false],inacessivel:[null,true]};
+  document.querySelectorAll('[data-mc-ico]').forEach(e=>{const k=e.dataset.mcIco;
+    e.innerHTML=leg[k]?mcSvg('BLO',leg[k][0],leg[k][1],14):mcSvg(k==='LANC'?'MGI':k,null,false,(MC_TIPOS[k]||{}).eixo?11:14);});
+}
+
 /* ═══════════ LAYER TOGGLES ═══════════ */
 function renderLayers(){
   const m01=['lider_areas','prio_erosao','sond_spt','sond_ai'];
-  const m03=['areas_prio','ac_criticas','ac_pontos','ble_guaipo','sec_feito','sec_pend'];
+  const m03=['areas_prio',/*'ac_criticas',*/'ac_pontos','ble_guaipo','micro_campo','sec_feito','sec_pend'];
   const base=['subbacias','hidrografia'];
   document.getElementById('layersM01El').innerHTML=buildLRows(m01);
   document.getElementById('layersM03El').innerHTML=buildLRows(m03);
@@ -600,6 +708,7 @@ function buildSw(k,d){
   if(k==='ac_criticas')return`<svg width="14" height="14"><rect x="1" y="1" width="12" height="12" fill="rgba(185,28,28,.2)" stroke="#B91C1C" stroke-width="2" stroke-dasharray="4,2"/></svg>`;
   if(k==='ac_pontos')return`<svg width="14" height="14"><polygon points="7,1 13,13 1,13" fill="#EF4444" stroke="white" stroke-width="1.2"/></svg>`;
   if(k==='ble_guaipo')return`<svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="#7C3AED" stroke="white" stroke-width="1.5"/></svg>`;
+  if(k==='micro_campo')return mcSvg('BLO',null,false,14);
   return`<svg width="10" height="14"><path d="M5 0C2.24 0 0 2.24 0 5C0 8.75 5 14 5 14S10 8.75 10 5C10 2.24 7.76 0 5 0Z" fill="#1A9B6C"/></svg>`;
 }
 function lcount(k){
@@ -616,6 +725,7 @@ function lcount(k){
   if(k==='ac_pontos')   return DATA_AC_PTS.length;
   if(k==='ble_guaipo')  return DATA_BLE.length;
   if(k==='areas_contrib') return DATA_AREASCONTRIB.length;
+  if(k==='micro_campo')  return DATA_MICROCAMPO.length;
   return records.filter(r=>r.lat).length;
 }
 function toggleLayer(k){
