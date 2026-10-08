@@ -21,11 +21,11 @@
      DELETE /api/fotos/:id
      GET    /data/*.geojson           → camadas do mapa
    ═══════════════════════════════════════════════════════════════ */
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });   // lê o api/.env de qualquer pasta
 const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
-const { conectar, paraFeature } = require('./db');
+const { conectar, paraFeature, uriSemSenha } = require('./db');
 const { validarId, validarRegistro } = require('./registro');
 const { criarAuth } = require('./auth');
 const { criarRotasAdmin } = require('./admin');
@@ -33,6 +33,9 @@ const { criarRotasAdmin } = require('./admin');
 const PRODUCAO = process.env.NODE_ENV === 'production';
 const CONFIG = {
   porta: Number(process.env.PORT) || 3000,
+  // 127.0.0.1 = só este computador acessa a porta diretamente.
+  // Na nuvem, o Caddy (HTTPS) recebe o acesso de fora e repassa para cá.
+  host: (process.env.HOST || '127.0.0.1').trim(),
   mongoUri: process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017',
   mongoDb: process.env.MONGODB_DB || 'campo_iam',
   sessaoDias: Number(process.env.SESSAO_DIAS) || 7,
@@ -222,15 +225,19 @@ async function iniciar() {
   try {
     conexao = await conectar(CONFIG.mongoUri, CONFIG.mongoDb);
   } catch (e) {
-    console.error(`\n✖ Não foi possível conectar ao MongoDB em ${CONFIG.mongoUri}`);
-    console.error('  Verifique se o MongoDB está instalado e o serviço "MongoDB Server" está rodando.');
-    console.error('  Detalhe:', e.message, '\n');
+    console.error(`\n✖ Não foi possível conectar ao MongoDB em ${uriSemSenha(CONFIG.mongoUri)}`);
+    if (/^mongodb\+srv:/.test(CONFIG.mongoUri))
+      console.error('  Atlas: confira usuário/senha no .env e se o IP deste servidor está liberado em Network Access.');
+    else
+      console.error('  Verifique se o MongoDB está instalado e o serviço "MongoDB Server" está rodando.');
+    console.error('  Detalhe:', String(e.message).replace(/mongodb(\+srv)?:\/\/\S+/g, uriSemSenha), '\n');
     process.exit(1);
   }
   const total = await conexao.usuarios.countDocuments({});
   const app = criarApp(conexao);
-  const servidor = app.listen(CONFIG.porta, () => {
-    console.log(`\n✔ Campo IAM rodando em http://localhost:${CONFIG.porta}  (banco "${CONFIG.mongoDb}")`);
+  const servidor = app.listen(CONFIG.porta, CONFIG.host, () => {
+    const local = ['127.0.0.1', 'localhost', '::1'].includes(CONFIG.host) ? 'localhost' : CONFIG.host;
+    console.log(`\n✔ Campo IAM rodando em http://${local}:${CONFIG.porta}  (banco "${CONFIG.mongoDb}"${PRODUCAO ? ', modo produção' : ''})`);
     if (!total) console.log('  ⚠ Nenhum usuário cadastrado. Crie o primeiro com:\n    npm run usuarios -- criar seu@email.com "Seu Nome" --admin');
     console.log('');
   });

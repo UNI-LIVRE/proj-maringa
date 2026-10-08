@@ -119,8 +119,9 @@ Só insere registros novos; nunca altera nem apaga o que já está no banco.
 | GET | `/api/fotos/:id` | sim | baixa a imagem |
 | DELETE | `/api/fotos/:id` | sim | apaga a imagem |
 
-## Para a nuvem (futuro)
+## Na nuvem
 
-No servidor, o `.env` muda `MONGODB_URI` (Atlas) e ativa `NODE_ENV=production`
-(cookie só por HTTPS, HSTS, IP real atrás do balanceador). O site passa a ser
-aberto pelo endereço da API — não é preciso mexer no `config.js`.
+Roteiro passo a passo em **`deploy/NUVEM.md`** (Lightsail + Atlas + Caddy com HTTPS).
+No servidor, o `.env` usa o Atlas e `NODE_ENV=production` (cookie só por HTTPS, HSTS,
+IP real atrás do Caddy). O sistema escuta só em `127.0.0.1` (`HOST` no `.env`):
+quem atende de fora é o Caddy. Nas mensagens de erro, a senha do banco aparece como `****`.

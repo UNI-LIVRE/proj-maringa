@@ -14,10 +14,10 @@
    • registros excluídos no backup entram como excluídos
      (assim não "ressuscitam" depois).
    ═══════════════════════════════════════════════════════════════ */
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });   // lê o api/.env de qualquer pasta
 const fs = require('fs');
 const path = require('path');
-const { conectar } = require('./db');
+const { conectar, uriSemSenha } = require('./db');
 const { validarId, validarRegistro } = require('./registro');
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017';
@@ -100,7 +100,7 @@ async function main() {
     }
 
     console.log(`\nBackup: ${path.basename(arquivo)}  (exportado em ${bk.exportadoEm || '?'})`);
-    console.log(`Banco:  ${MONGODB_DB}  em ${MONGODB_URI}\n`);
+    console.log(`Banco:  ${MONGODB_DB}  em ${uriSemSenha(MONGODB_URI)}\n`);
     console.log(`  ${plano.novos.length} registro(s) novo(s) para inserir`);
     console.log(`     (${plano.novos.filter(d => d.properties.excluido).length} deles marcados como excluídos)`);
     console.log(`  ${plano.existentes.length} registro(s) já existem no banco → não serão alterados`);

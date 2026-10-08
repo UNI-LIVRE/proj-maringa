@@ -13,7 +13,7 @@
    Passe-a para a pessoa por um canal seguro; ela será obrigada a
    trocar no primeiro acesso.
    ═══════════════════════════════════════════════════════════════ */
-require('dotenv').config();
+require('dotenv').config({ path: require('path').join(__dirname, '.env') });   // lê o api/.env de qualquer pasta
 const { conectar } = require('./db');
 const { criarContas } = require('./contas');
 

@@ -3,6 +3,17 @@
    - GridFS "fotos": as imagens (coleções fotos.files e fotos.chunks) */
 const { MongoClient, GridFSBucket } = require('mongodb');
 
+/** Endereço do banco para mostrar em mensagens, sem a senha (os logs do servidor ficam gravados). */
+function uriSemSenha(uri) {
+  const u = String(uri || ''), i = u.indexOf('//');
+  if (i < 0) return u;
+  const arroba = u.lastIndexOf('@');            // a senha pode conter @ por engano: corta até o último
+  if (arroba < i) return u;
+  const doisPontos = u.indexOf(':', i + 2);
+  const usuario = doisPontos > 0 && doisPontos < arroba ? u.slice(i + 2, doisPontos) : u.slice(i + 2, arroba);
+  return u.slice(0, i + 2) + usuario + ':****' + u.slice(arroba);
+}
+
 async function conectar(uri, nomeBanco) {
   const client = new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
   await client.connect();
@@ -34,4 +45,4 @@ function paraFeature(doc) {
   return { type: 'Feature', id: doc._id, geometry: doc.geometry || null, properties: doc.properties || {} };
 }
 
-module.exports = { conectar, paraFeature };
+module.exports = { uriSemSenha, conectar, paraFeature };
