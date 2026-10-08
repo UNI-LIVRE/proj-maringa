@@ -1,0 +1,26 @@
+# ═══════════════════════════════════════════════════════════════
+#  Caddy — recebe o acesso de fora com HTTPS e repassa para o sistema
+#  Vai em: /etc/caddy/Caddyfile  (no servidor)
+#
+#  Troque  IP-COM-TRACOS  pelo IP fixo do servidor com traços no lugar
+#  dos pontos. Ex.: IP 18.231.45.67  →  campo-iam.18-231-45-67.sslip.io
+#
+#  Quando o DNS da Unilivre estiver disponível, troque a linha do
+#  endereço por:  campo.unilivre.org.br {
+#  e rode:  sudo systemctl reload caddy
+#  O certificado HTTPS é emitido e renovado sozinho.
+# ═══════════════════════════════════════════════════════════════
+
+campo-iam.IP-COM-TRACOS.sslip.io {
+	encode zstd gzip
+
+	# o sistema (Node) só escuta em 127.0.0.1:3000 — ninguém de fora chega nele direto
+	reverse_proxy 127.0.0.1:3000
+
+	log {
+		output file /var/log/caddy/campo-iam.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+	}
+}

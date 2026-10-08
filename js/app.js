@@ -2,7 +2,7 @@
 const LDEFS = {
   lider_areas:  {label:'Áreas LIDER',       color:'#C87F00', type:'polygon'},
   prio_erosao:  {label:'Prioridade Erosão',  color:'#DC2626', type:'point'},
-  //ac_criticas:  {label:'Áreas Críticas (AC)',   color:'#B91C1C', type:'polygon'},
+  // ac_criticas:  {label:'Áreas Críticas (AC)',   color:'#B91C1C', type:'polygon'},   // camada retirada do mapa
   ac_pontos:    {label:'Pontos Críticos META03', color:'#EF4444', type:'point'},
   ble_guaipo:   {label:'Cadastro BLE (Guaipó)', color:'#7C3AED', type:'point'},
   subbacias:    {label:'Subbacias IAM',      color:'#0E7490', type:'polygon'},
@@ -28,7 +28,7 @@ const DATA_FILES = {
   sond_spt:    'data/sond_spt.geojson',
   sond_ai:     'data/sond_ai.geojson',
   areas_prio:  'data/areas_prio.geojson',
-  //ac_criticas: 'data/ac_criticas.geojson',
+  // ac_criticas: 'data/ac_criticas.geojson',   // camada retirada do mapa
   ac_pontos:   'data/ac_pontos.geojson',
   ble_guaipo:  'data/ble_guaipo.geojson',
   sec_feito:   'data/sec_feito.geojson',

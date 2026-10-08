@@ -1,0 +1,48 @@
+# ═══════════════════════════════════════════════════════════════
+#  Serviço do sistema (systemd) — liga sozinho com o servidor e
+#  reinicia se cair.
+#  Vai em: /etc/systemd/system/campo-iam.service  (no servidor)
+#
+#  Comandos úteis:
+#    sudo systemctl status campo-iam      → está rodando?
+#    sudo systemctl restart campo-iam     → reinicia (depois de atualizar o código)
+#    sudo journalctl -u campo-iam -n 50   → últimas mensagens
+# ═══════════════════════════════════════════════════════════════
+[Unit]
+Description=Campo IAM - Maringa (pagina + API)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=campo
+Group=campo
+WorkingDirectory=/opt/unilivre/app/api
+ExecStart=/usr/bin/node server.js
+Environment=NODE_ENV=production
+Restart=always
+RestartSec=5
+
+# ─── proteções: o sistema só lê os próprios arquivos e não mexe no resto do servidor ───
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/opt/unilivre/app
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+LockPersonality=true
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+MemoryMax=600M
+
+[Install]
+WantedBy=multi-user.target
